@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "807134009565",
+    "project_id": "animatch-9d840",
+    "storage_bucket": "animatch-9d840.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:807134009565:android:48ea11908f7c05a28ca334",
+        "android_client_info": {
+          "package_name": "com.example.animatch_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgrsPAjaUtxjTsPahHUc3OxscrGWi9vEo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
