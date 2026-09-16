@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_page.dart';
+import 'root_page.dart';
+import 'profile_setup_page.dart';
+import 'organization_home_page.dart';
+import 'organization_pending_page.dart';
+import 'hospital_home_page.dart';
+import 'hospital_pending_page.dart';
+
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -13,6 +22,7 @@ class _SplashPageState extends State<SplashPage>
   late AnimationController _ctrl;
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -27,12 +37,75 @@ class _SplashPageState extends State<SplashPage>
         CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _ctrl.forward();
     Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => const LoginPage()));
-      }
+      _checkLoginState();
     });
   }
+
+  Future<void> _checkLoginState() async {
+    if (!mounted) return;
+    setState(() => _hasError = false);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const LoginPage()));
+      return;
+    }
+
+    try {
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(user.uid)
+          .get();
+
+      if (orgDoc.exists) {
+        final status = orgDoc.data()?['status'] ?? 'pending';
+        if (!mounted) return;
+        if (status == 'approved') {
+          Navigator.pushReplacement(context,
+              MaterialPageRoute(builder: (_) => const OrganizationHomePage()));
+        } else {
+          Navigator.pushReplacement(context,
+              MaterialPageRoute(builder: (_) => const OrganizationPendingPage()));
+        }
+        return;
+      }
+
+      final hospitalDoc = await FirebaseFirestore.instance
+          .collection('hospitals')
+          .doc(user.uid)
+          .get();
+
+      if (hospitalDoc.exists) {
+        final status = hospitalDoc.data()?['status'] ?? 'pending';
+        if (!mounted) return;
+        if (status == 'approved') {
+          Navigator.pushReplacement(context,
+              MaterialPageRoute(builder: (_) => const HospitalHomePage()));
+        } else {
+          Navigator.pushReplacement(context,
+              MaterialPageRoute(builder: (_) => const HospitalPendingPage()));
+        }
+        return;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted) return;
+      if (!userDoc.exists) {
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => const ProfileSetupPage()));
+      } else {
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => const RootPage()));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _hasError = true);
+    }
+  }
+
 
   @override
   void dispose() {
@@ -43,50 +116,45 @@ class _SplashPageState extends State<SplashPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFE8845A), Color(0xFFF4A261), Color(0xFFFFCC80)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: ScaleTransition(
-              scale: _scaleAnim,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 120, height: 120,
-                    decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(32)),
-                    child: const Center(
-                        child: Text('🐾',
-                            style: TextStyle(fontSize: 64))),
+      backgroundColor: Colors.white,
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: ScaleTransition(
+            scale: _scaleAnim,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  color: Colors.white,
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: MediaQuery.of(context).size.width * 0.8,
+                    fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 24),
-                  const Text('AniMatch',
-                      style: TextStyle(
-                          fontSize: 42,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 2)),
-                  const SizedBox(height: 8),
-                  const Text('Find Your Wild Connection',
-                      style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                          letterSpacing: 1)),
-                  const SizedBox(height: 60),
+                ),
+                const SizedBox(height: 60),
+                if (_hasError) ...[
+                  const Text('接続がうまくいきませんでした',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF3D2B1F))),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _checkLoginState,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE8845A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                    ),
+                    child: const Text('もう一度試す'),
+                  ),
+                ] else
                   const CircularProgressIndicator(
-                      color: Colors.white70,
+                      color: Color(0xFFE8845A),
                       strokeWidth: 2),
-                ],
-              ),
+              ],
             ),
           ),
         ),

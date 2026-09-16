@@ -1,35 +1,78 @@
 import 'package:flutter/material.dart';
 import 'home_page.dart';
-import 'search_page.dart';
-import 'support_page.dart';
 import 'chat_list_page.dart';
 import 'profile_page.dart';
 import 'event_page.dart';
-import 'hospital_page.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'animal_map_page.dart';
+
+
 
 class RootPage extends StatefulWidget {
-  const RootPage({super.key});
+  final int initialIndex;
+  const RootPage({super.key, this.initialIndex = 0});
 
   @override
   State<RootPage> createState() => _RootPageState();
 }
 
 class _RootPageState extends State<RootPage> {
-  int _idx = 0;
+  late int _idx;
+  final ScrollController _homeScrollController = ScrollController();
+  final Set<int> _visitedIndices = {};
 
-  final _pages = const [
-    HomePage(),
-    SearchPage(),
-    EventPage(),
-    SupportPage(),
-    ChatListPage(),
-    ProfilePage(),
+  @override
+  void initState() {
+    super.initState();
+    _idx = widget.initialIndex;
+    _visitedIndices.add(_idx);
+    _initFCM();
+  }
+
+  @override
+  void dispose() {
+    _homeScrollController.dispose();
+    super.dispose();
+  }
+
+
+  Future<void> _initFCM() async {
+    if (kIsWeb) return;
+    final messaging = FirebaseMessaging.instance;
+    await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+  }
+
+
+  List<Widget> get _pages => [
+    HomePage(scrollController: _homeScrollController),
+    const AnimalMapPage(),
+    const EventPage(),
+    const ChatListPage(),
+    const ProfilePage(),
   ];
+
+  void _selectTab(int index) {
+    setState(() {
+      _idx = index;
+      _visitedIndices.add(index);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pages = _pages;
     return Scaffold(
-      body: _pages[_idx],
+      body: IndexedStack(
+        index: _idx,
+        children: List.generate(pages.length, (i) {
+          return _visitedIndices.contains(i) ? pages[i] : const SizedBox.shrink();
+        }),
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -47,17 +90,26 @@ class _RootPageState extends State<RootPage> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavItem(icon: Icons.home_rounded, label: 'ホーム',
-                    selected: _idx == 0, onTap: () => setState(() => _idx = 0)),
-                _NavItem(icon: Icons.search_rounded, label: '検索',
-                    selected: _idx == 1, onTap: () => setState(() => _idx = 1)),
+                    selected: _idx == 0, onTap: () {
+                      if (_idx == 0) {
+                        _homeScrollController.animateTo(
+                          0,
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeOut,
+                        );
+                      } else {
+                        _selectTab(0);
+                      }
+                    }),
+                _NavItem(icon: Icons.pets_rounded, label: 'どうぶつマップ',
+                    selected: _idx == 1, onTap: () => _selectTab(1)),
                 _NavItem(icon: Icons.event_rounded, label: 'イベント',
-                    selected: _idx == 2, onTap: () => setState(() => _idx = 2)),
-                _NavItem(icon: Icons.volunteer_activism_rounded, label: '支援',
-                    selected: _idx == 3, onTap: () => setState(() => _idx = 3)),
+                    selected: _idx == 2, onTap: () => _selectTab(2)),
                 _NavItem(icon: Icons.chat_bubble_rounded, label: 'チャット',
-                    selected: _idx == 4, onTap: () => setState(() => _idx = 4)),
+                    selected: _idx == 3, onTap: () => _selectTab(3)),
                 _NavItem(icon: Icons.person_rounded, label: 'マイページ',
-                    selected: _idx == 5, onTap: () => setState(() => _idx = 5)),
+                    selected: _idx == 4, onTap: () => _selectTab(4)),
+
               ],
             ),
           ),
@@ -66,6 +118,7 @@ class _RootPageState extends State<RootPage> {
     );
   }
 }
+
 
 class _NavItem extends StatelessWidget {
   final IconData icon;

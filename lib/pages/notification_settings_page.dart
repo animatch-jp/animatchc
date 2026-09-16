@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -12,33 +14,66 @@ class _NotificationSettingsPageState
     extends State<NotificationSettingsPage> {
 
   final _settings = {
-    'いいねが来た': true,
-    'マッチした': true,
-    'メッセージが来た': true,
-    'フレンドリクエスト': true,
-    '足あと': false,
-    '保護活動の緊急情報': true,
-    '迷子情報（近くで）': true,
-    'イベントのお知らせ': false,
-    '病院マップの新情報': false,
+    'コメント・メッセージ': true,
+    'リアクション': true,
+    'ランキング・バッジ': true,
+    'イベント関連': true,
     'AniMatchからのお知らせ': true,
   };
 
   final _icons = {
-    'いいねが来た': Icons.favorite_rounded,
-    'マッチした': Icons.celebration_rounded,
-    'メッセージが来た': Icons.chat_bubble_rounded,
-    'フレンドリクエスト': Icons.people_rounded,
-    '足あと': Icons.remove_red_eye_rounded,
-    '保護活動の緊急情報': Icons.warning_rounded,
-    '迷子情報（近くで）': Icons.search_rounded,
-    'イベントのお知らせ': Icons.event_rounded,
-    '病院マップの新情報': Icons.local_hospital_rounded,
+    'コメント・メッセージ': Icons.chat_bubble_rounded,
+    'リアクション': Icons.favorite_rounded,
+    'ランキング・バッジ': Icons.emoji_events_rounded,
+    'イベント関連': Icons.event_rounded,
     'AniMatchからのお知らせ': Icons.notifications_rounded,
   };
 
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    final saved = doc.data()?['notificationSettings'] as Map<String, dynamic>?;
+    if (saved != null) {
+      setState(() {
+        saved.forEach((key, value) {
+          if (_settings.containsKey(key)) {
+            _settings[key] = value as bool;
+          }
+        });
+      });
+    }
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _saveSetting(String key, bool value) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .update({'notificationSettings.$key': value});
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFFF8F5),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F5),
       appBar: AppBar(
@@ -49,16 +84,26 @@ class _NotificationSettingsPageState
         elevation: 0,
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               setState(() {
                 _settings.updateAll((key, value) => true);
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('全ての通知をオンにしました🔔'),
-                  backgroundColor: Color(0xFFE8845A),
-                ),
-              );
+              final uid = FirebaseAuth.instance.currentUser?.uid;
+              if (uid != null) {
+                final allOn = {for (var k in _settings.keys) 'notificationSettings.$k': true};
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .update(allOn);
+              }
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('全ての通知をオンにしました🔔'),
+                    backgroundColor: Color(0xFFE8845A),
+                  ),
+                );
+              }
             },
             child: const Text('全てオン',
                 style: TextStyle(color: Color(0xFFE8845A))),
@@ -70,54 +115,26 @@ class _NotificationSettingsPageState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: const Color(0xFFE8845A).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16)),
-              child: const Row(
-                children: [
-                  Text('🔔', style: TextStyle(fontSize: 28)),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                        '通知をオフにしても\n緊急情報は赤いバッジで表示されます',
-                        style: TextStyle(fontSize: 12,
-                            color: Color(0xFF3D2B1F), height: 1.5)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text('マッチング',
+            const Text('コミュニティ',
                 style: TextStyle(fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: Colors.grey)),
             const SizedBox(height: 8),
-            _buildSection(['いいねが来た', 'マッチした',
-              'メッセージが来た', 'フレンドリクエスト', '足あと']),
-            const SizedBox(height: 20),
-            const Text('保護活動・緊急',
-                style: TextStyle(fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey)),
-            const SizedBox(height: 8),
-            _buildSection(['保護活動の緊急情報', '迷子情報（近くで）']),
+            _buildSection(['コメント・メッセージ', 'リアクション', 'ランキング・バッジ']),
             const SizedBox(height: 20),
             const Text('その他',
                 style: TextStyle(fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: Colors.grey)),
             const SizedBox(height: 8),
-            _buildSection(['イベントのお知らせ',
-              '病院マップの新情報', 'AniMatchからのお知らせ']),
+            _buildSection(['イベント関連', 'AniMatchからのお知らせ']),
             const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
+
   Widget _buildSection(List<String> keys) {
     return Container(
       decoration: BoxDecoration(
@@ -149,8 +166,11 @@ class _NotificationSettingsPageState
                                 color: Color(0xFF3D2B1F)))),
                     Switch(
                       value: _settings[key]!,
-                      onChanged: (val) => setState(() => _settings[key] = val),
-                      activeColor: const Color(0xFFE8845A),
+                      onChanged: (val) {
+                        setState(() => _settings[key] = val);
+                        _saveSetting(key, val);
+                      },
+                      activeThumbColor: const Color(0xFFE8845A),
                     ),
                   ],
                 ),

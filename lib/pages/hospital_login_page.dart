@@ -1,0 +1,217 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'hospital_signup_page.dart';
+import 'hospital_home_page.dart';
+import 'hospital_pending_page.dart';
+
+class HospitalLoginPage extends StatefulWidget {
+  const HospitalLoginPage({super.key});
+
+  @override
+  State<HospitalLoginPage> createState() => _HospitalLoginPageState();
+}
+
+class _HospitalLoginPageState extends State<HospitalLoginPage> {
+final _emailCtrl = TextEditingController();
+final _passCtrl = TextEditingController();
+bool _isLoading = false;
+bool _obscurePassword = true;
+
+void _showPasswordReset() {
+final emailCtrl = TextEditingController();
+showDialog(
+context: context,
+builder: (_) => AlertDialog(
+shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+title: const Text('パスワードをリセット'),
+content: Column(
+mainAxisSize: MainAxisSize.min,
+children: [
+const Text('登録したメールアドレスを入力してください', style: TextStyle(fontSize: 13, color: Colors.grey)),
+const SizedBox(height: 16),
+TextField(
+controller: emailCtrl,
+keyboardType: TextInputType.emailAddress,
+decoration: InputDecoration(
+labelText: 'メールアドレス',
+border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4DA8DA))),
+),
+),
+],
+),
+actions: [
+TextButton(onPressed: () => Navigator.pop(context), child: const Text('キャンセル', style: TextStyle(color: Colors.grey))),
+ElevatedButton(
+onPressed: () async {
+if (emailCtrl.text.isEmpty) return;
+try {
+await FirebaseAuth.instance.sendPasswordResetEmail(email: emailCtrl.text.trim());
+if (mounted) {
+Navigator.pop(context);
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(content: Text('パスワードリセットメールを送信しました📧'), backgroundColor: Color(0xFF2D6A4F)),
+);
+}
+} on FirebaseAuthException catch (e) {
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(
+SnackBar(content: Text(e.code == 'user-not-found' ? 'このメールアドレスは登録されていません' : 'エラーが発生しました'), backgroundColor: Colors.red),
+);
+}
+}
+},
+style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4DA8DA), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+child: const Text('送信'),
+),
+],
+),
+);
+}
+
+Future<void> _login() async {
+if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty) {
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(content: Text('メールアドレスとパスワードを入力してください'), backgroundColor: Colors.red),
+);
+return;
+}
+
+setState(() => _isLoading = true);
+
+try {
+final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+email: _emailCtrl.text.trim(),
+password: _passCtrl.text.trim(),
+);
+
+final uid = userCredential.user?.uid;
+final hospitalDoc = await FirebaseFirestore.instance.collection('hospitals').doc(uid).get();
+
+if (!hospitalDoc.exists) {
+await FirebaseAuth.instance.signOut();
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(content: Text('病院アカウントが見つかりません'), backgroundColor: Colors.red),
+);
+}
+return;
+}
+
+final status = hospitalDoc.data()?['status'] ?? 'pending';
+
+if (status != 'approved') {
+if (mounted) {
+Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HospitalPendingPage()));
+}
+return;
+}
+
+if (mounted) {
+Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HospitalHomePage()));
+}
+} on FirebaseAuthException catch (e) {
+String message = 'ログインに失敗しました';
+if (e.code == 'user-not-found') message = 'アカウントが見つかりません';
+if (e.code == 'wrong-password') message = 'パスワードが間違っています';
+if (e.code == 'invalid-email') message = 'メールアドレスの形式が正しくありません';
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
+}
+} finally {
+if (mounted) setState(() => _isLoading = false);
+}
+}
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFFF0F8FC),
+    appBar: AppBar(
+      title: const Text('病院・獣医師ログイン', style: TextStyle(fontWeight: FontWeight.w900)),
+      backgroundColor: const Color(0xFFF0F8FC),
+      foregroundColor: Colors.black,
+      elevation: 0,
+    ),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('🏥', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 16),
+          const Text('病院・獣医師アカウント', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text('病院情報の掲載・管理ができます', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          const SizedBox(height: 32),
+          TextField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              labelText: 'メールアドレス',
+              prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF7FC4E8)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passCtrl,
+            obscureText: _obscurePassword,
+            decoration: InputDecoration(
+              labelText: 'パスワード',
+              prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF7FC4E8)),
+              suffixIcon: IconButton(
+                icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _showPasswordReset,
+              child: const Text('パスワードを忘れた方', style: TextStyle(color: Color(0xFF7FC4E8))),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _login,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4DA8DA),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: _isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('ログイン', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HospitalSignupPage())),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF4DA8DA),
+                side: const BorderSide(color: Color(0xFF4DA8DA)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: const Text('新規登録申請はこちら', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+}

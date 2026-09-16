@@ -1,7 +1,6 @@
 import 'profile_setup_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'root_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -17,6 +16,7 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
+  bool _isAgeConfirmed = false;
 
   @override
   void dispose() {
@@ -48,6 +48,17 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
+    if (!_isAgeConfirmed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('利用規約とプライバシーポリシーへの同意が必要です'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+
     setState(() => _isLoading = true);
 
     try {
@@ -60,13 +71,13 @@ class _RegisterPageState extends State<RegisterPage> {
           context,
           MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
         );
-
       }
     } on FirebaseAuthException catch (e) {
       String message = '登録に失敗しました';
-      if (e.code == 'email-already-in-use') message = 'このメールアドレスは既に使用されています';
+      if (e.code == 'email-already-in-use') message = 'このメールアドレスは既に登録されています。ログイン画面からお進みください';
       if (e.code == 'invalid-email') message = 'メールアドレスの形式が正しくありません';
       if (e.code == 'weak-password') message = 'パスワードが弱すぎます';
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message), backgroundColor: Colors.red),
@@ -76,7 +87,6 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -188,7 +198,24 @@ class _RegisterPageState extends State<RegisterPage> {
                       filled: true, fillColor: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _isAgeConfirmed,
+                        onChanged: (val) => setState(() => _isAgeConfirmed = val ?? false),
+                        activeColor: const Color(0xFFE8845A),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          '利用規約とプライバシーポリシーに同意します（13歳未満の方はご利用いただけません）',
+                          style: TextStyle(fontSize: 13, color: Color(0xFF3D2B1F)),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(

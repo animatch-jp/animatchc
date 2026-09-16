@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'premium_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'user_profile_page.dart';
 
 class FootprintPage extends StatefulWidget {
   const FootprintPage({super.key});
@@ -9,150 +11,206 @@ class FootprintPage extends StatefulWidget {
 }
 
 class _FootprintPageState extends State<FootprintPage> {
-  bool _isPremium = false;
+  List<Map<String, dynamic>> _footprints = [];
+  bool _isLoading = true;
 
-  final _footprints = [
-    {'name': 'さくら', 'emoji': '🐕', 'city': '大阪', 'time': '5分前', 'pet': '犬'},
-    {'name': '???', 'emoji': '🐱', 'city': '???', 'time': '12分前', 'pet': '???'},
-    {'name': '???', 'emoji': '🐰', 'city': '???', 'time': '30分前', 'pet': '???'},
-    {'name': 'けんた', 'emoji': '🐶', 'city': '福岡', 'time': '1時間前', 'pet': '犬'},
-    {'name': '???', 'emoji': '🐹', 'city': '???', 'time': '2時間前', 'pet': '???'},
-    {'name': '???', 'emoji': '🐈', 'city': '???', 'time': '3時間前', 'pet': '???'},
-    {'name': 'みか', 'emoji': '🐰', 'city': '東京', 'time': '5時間前', 'pet': 'うさぎ'},
-    {'name': '???', 'emoji': '🐦', 'city': '???', 'time': '昨日', 'pet': '???'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadFootprints();
+  }
 
+  Future<void> _loadFootprints() async {
+    try {
+      final myUid = FirebaseAuth.instance.currentUser?.uid;
+      if (myUid == null) return;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('footprints')
+          .doc(myUid)
+          .collection('visitors')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .get();
+
+      final List<Map<String, dynamic>> footprints = [];
+      for (final doc in snapshot.docs) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(doc.id)
+            .get();
+        if (userDoc.exists) {
+          final createdAt = doc.data()['createdAt'] as Timestamp?;
+          footprints.add({
+            'uid': doc.id,
+            'createdAt': createdAt,
+            'timeStr': _timeAgo(createdAt),
+            ...userDoc.data()!,
+          });
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _footprints = footprints;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _timeAgo(Timestamp? timestamp) {
+    if (timestamp == null) return '';
+    final now = DateTime.now();
+    final time = timestamp.toDate();
+    final diff = now.difference(time);
+
+    if (diff.inMinutes < 1) return 'たった今';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}分前';
+    if (diff.inHours < 24) return '${diff.inHours}時間前';
+    if (diff.inDays < 7) return '${diff.inDays}日前';
+    return '${time.month}/${time.day}';
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F5),
       appBar: AppBar(
         title: const Text('足あと 👣',
-            style: TextStyle(fontWeight: FontWeight.w900,
-                color: Color(0xFF3D2B1F))),
+            style: TextStyle(
+                fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
         backgroundColor: const Color(0xFFFFF8F5),
         elevation: 0,
       ),
-      body: Column(
+      body: _isLoading
+          ? const Center(
+          child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+          : Column(
         children: [
-          if (!_isPremium)
-            GestureDetector(
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(
-                      builder: (_) => const PremiumPage())),
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFFE8845A), Color(0xFFFFCC80)]),
-                    borderRadius: BorderRadius.circular(16)),
-                child: const Row(
-                  children: [
-                    Text('👑', style: TextStyle(fontSize: 28)),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('誰が見たかわかる！',
-                              style: TextStyle(fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white)),
-                          Text('プレミアムにアップグレードする',
-                              style: TextStyle(fontSize: 12,
-                                  color: Colors.white70)),
-                        ],
-                      ),
-                    ),
-                    Icon(Icons.chevron_right_rounded,
-                        color: Colors.white),
-                  ],
-                ),
-              ),
-            ),
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Text('${_footprints.length}人が見ました',
-                    style: const TextStyle(fontSize: 14,
+                    style: const TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF3D2B1F))),
-                const Spacer(),
-                if (!_isPremium)
-                  GestureDetector(
-                    onTap: () => setState(() => _isPremium = true),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFE8845A).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20)),
-                      child: const Text('プレミアムで全員見る👑',
-                          style: TextStyle(fontSize: 11,
-                              color: Color(0xFFE8845A),
-                              fontWeight: FontWeight.bold)),
-                    ),
-                  ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          Expanded(
+
+          _footprints.isEmpty
+              ? const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('👣',
+                      style: TextStyle(fontSize: 64)),
+                  SizedBox(height: 16),
+                  Text('まだ足あとがありません',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF3D2B1F))),
+                  SizedBox(height: 8),
+                  Text('プロフィールを充実させよう！',
+                      style: TextStyle(
+                          fontSize: 14, color: Colors.grey)),
+                ],
+              ),
+            ),
+          )
+              : Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding:
+              const EdgeInsets.fromLTRB(16, 0, 16, 16),
               itemCount: _footprints.length,
               itemBuilder: (_, i) {
                 final fp = _footprints[i];
-                final isHidden = fp['name'] == '???' && !_isPremium;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 6, offset: const Offset(0, 2))],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48, height: 48,
-                        decoration: BoxDecoration(
-                            color: isHidden
-                                ? Colors.grey[200]
-                                : const Color(0xFFE8845A).withOpacity(0.1),
-                            shape: BoxShape.circle),
-                        child: Center(
-                            child: Text(
-                                isHidden ? '👣' : fp['emoji'] as String,
-                                style: const TextStyle(fontSize: 24))),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                isHidden ? 'プレミアムで見る👑' : fp['name'] as String,
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: isHidden
-                                        ? Colors.grey : const Color(0xFF3D2B1F))),
-                            Text(
-                                isHidden ? '???' : '${fp['pet']} ・ ${fp['city']}',
-                                style: TextStyle(fontSize: 12,
-                                    color: Colors.grey[500])),
-                          ],
+                return GestureDetector(
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => UserProfilePage(
+                              uid: fp['uid']))),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                            color:
+                            Colors.black.withOpacity(0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2))
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        ClipOval(
+                          child: fp['profileImageUrl'] != null &&
+                              (fp['profileImageUrl']
+                              as String)
+                                  .isNotEmpty
+                              ? Image.network(
+                              fp['profileImageUrl'],
+                              width: 48,
+                              height: 48,
+                              fit: BoxFit.cover)
+                              : Container(
+                              width: 48,
+                              height: 48,
+                              color:
+                              const Color(0xFFFFE0D0),
+                              child: Center(
+                                  child: Text(
+                                    (fp['name'] ?? '🐾')
+                                        .toString()
+                                        .isNotEmpty
+                                        ? fp['name'][0]
+                                        : '🐾',
+                                    style: const TextStyle(
+                                        fontSize: 22,
+                                        color:
+                                        Color(0xFFE8845A),
+                                        fontWeight:
+                                        FontWeight.bold),
+                                  ))),
                         ),
-                      ),
-                      Text(fp['time'] as String,
-                          style: TextStyle(fontSize: 11,
-                              color: Colors.grey[400])),
-                    ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                            children: [
+                              Text(fp['name'] ?? '',
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                      Color(0xFF3D2B1F))),
+                              Text(
+                                  '${fp['animal'] ?? ''} ・ ${fp['prefecture'] ?? ''}',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500])),
+                            ],
+                          ),
+                        ),
+                        Text(fp['timeStr'] ?? '',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[400])),
+                      ],
+                    ),
                   ),
                 );
               },

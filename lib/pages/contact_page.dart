@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ContactPage extends StatefulWidget {
   const ContactPage({super.key});
@@ -12,6 +14,7 @@ class _ContactPageState extends State<ContactPage> {
   final _titleCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
   bool _submitted = false;
+  bool _isSending = false;
 
   final _categories = [
     '利用方法について',
@@ -22,6 +25,48 @@ class _ContactPageState extends State<ContactPage> {
     'その他',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl.addListener(() => setState(() {}));
+    _contentCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _contentCtrl.dispose();
+    _categoryCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_titleCtrl.text.isEmpty || _contentCtrl.text.isEmpty) return;
+    setState(() => _isSending = true);
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      await FirebaseFirestore.instance.collection('contacts').add({
+        'uid': uid ?? '',
+        'category': _categoryCtrl.value,
+        'title': _titleCtrl.text.trim(),
+        'content': _contentCtrl.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': '未対応',
+      });
+      if (mounted) setState(() => _submitted = true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('送信に失敗しました。もう一度お試しください'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
   @override
   Widget build(BuildContext context) {
     if (_submitted) {
@@ -128,7 +173,8 @@ class _ContactPageState extends State<ContactPage> {
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                               color: isSel
-                                  ? const Color(0xFFE8845A) : Colors.grey[300]!)),
+                                  ? const Color(0xFFE8845A)
+                                  : Colors.grey[300]!)),
                       child: Text(cat,
                           style: TextStyle(fontSize: 12,
                               color: isSel ? Colors.white : Colors.grey[700],
@@ -186,9 +232,11 @@ class _ContactPageState extends State<ContactPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _titleCtrl.text.isEmpty ? null : () {
-                  setState(() => _submitted = true);
-                },
+                onPressed: _titleCtrl.text.isEmpty ||
+                    _contentCtrl.text.isEmpty ||
+                    _isSending
+                    ? null
+                    : _submit,
                 style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE8845A),
                     foregroundColor: Colors.white,
@@ -196,7 +244,9 @@ class _ContactPageState extends State<ContactPage> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                     padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: const Text('送信する',
+                child: _isSending
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('送信する',
                     style: TextStyle(fontSize: 16,
                         fontWeight: FontWeight.bold)),
               ),
