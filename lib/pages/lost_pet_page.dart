@@ -98,181 +98,181 @@ void showLostPetDetail(BuildContext context, Map<String, dynamic> data, String p
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-          ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      child: data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty
-          ? Image.network(data['imageUrl'] as String,
-          width: double.infinity, height: 280, fit: BoxFit.cover)
-          : Container(
-        width: double.infinity,
-        height: 280,
-        color: const Color(0xFF3498DB).withOpacity(0.1),
-        child: Center(child: Text(data['emoji'] ?? '🐾', style: const TextStyle(fontSize: 60))),
-      ),
-    ),
-    Padding(
-        padding: const EdgeInsets.all(20),
+        controller: scrollController,
         child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            Row(
-            children: [
-            if (isMine)
-        Container(
-    margin: const EdgeInsets.only(right: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-        color: const Color(0xFF3498DB), borderRadius: BorderRadius.circular(10)),
-    child: const Text('自分の投稿',
-        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-  ),
-  if (data['urgent'] == true)
-  Container(
-  margin: const EdgeInsets.only(right: 8),
-  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-  decoration: BoxDecoration(
-  color: Colors.red, borderRadius: BorderRadius.circular(10)),
-  child: const Text('緊急',
-  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-  ),
-              if (data['isOrganization'] == true)
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(10)),
-                  child: const Text('団体',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                ),
-
-              _StatusBadge(status: data['status'] ?? 'lost'),
-  ],
-  ),
-  const SizedBox(height: 10),
-  Text(data['petName'] ?? '',
-  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
-  const SizedBox(height: 4),
-  Text(data['animalType'] ?? '', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
-  const Divider(height: 32),
-  _InfoRow(Icons.location_on_rounded, data['location'] ?? ''),
-  const SizedBox(height: 8),
-  _InfoRow(Icons.calendar_today_rounded, data['date'] ?? ''),
-  if ((data['reward'] ?? '').toString().isNotEmpty) ...[
-  const SizedBox(height: 8),
-  _InfoRow(Icons.card_giftcard_rounded, 'お礼：${data['reward']}'),
-  ],
-              const SizedBox(height: 20),
-              if ((data['description'] ?? '').toString().isNotEmpty) ...[
-                const Text('詳細', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 6),
-                Text(data['description'], style: const TextStyle(fontSize: 14, height: 1.5)),
-                const SizedBox(height: 20),
-              ],
-              Container(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              child: data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty
+                  ? Image.network(data['imageUrl'] as String,
+                  width: double.infinity, height: 280, fit: BoxFit.cover)
+                  : Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                    color: const Color(0xFF3498DB).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(14)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('連絡先', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    const SizedBox(height: 6),
-                    Text(
-                        (data['contact'] ?? '').toString().isNotEmpty
-                            ? data['contact']
-                            : '投稿者：${data['posterName'] ?? ''}',
-                        style: const TextStyle(fontSize: 14, height: 1.5)),
-                  ],
-                ),
+                height: 280,
+                color: const Color(0xFF3498DB).withOpacity(0.1),
+                child: Center(child: Text(data['emoji'] ?? '🐾', style: const TextStyle(fontSize: 60))),
               ),
-              if (isMine) ...[
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final newStatus = data['status'] == 'resolved' ? 'lost' : 'resolved';
-                      await FirebaseFirestore.instance
-                          .collection('lostPets')
-                          .doc(postId)
-                          .update({'status': newStatus});
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Color(0xFF2D6A4F)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    child: Text(
-                        data['status'] == 'resolved' ? '「未解決」に戻す' : '「見つかりました」にする',
-                        style: const TextStyle(color: Color(0xFF2D6A4F), fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          title: const Text('投稿を削除しますか？'),
-                          content: const Text('この操作は取り消せません。'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('キャンセル', style: TextStyle(color: Colors.grey)),
-                            ),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                              child: const Text('削除'),
-                            ),
-                          ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isMine)
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFF3498DB), borderRadius: BorderRadius.circular(10)),
+                          child: const Text('自分の投稿',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
-                      );
-                      if (confirm == true) {
-                        await FirebaseFirestore.instance.collection('lostPets').doc(postId).delete();
-                        if (context.mounted) Navigator.pop(context);
-                      }
-                    },
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                    label: const Text('削除する', style: TextStyle(color: Colors.red)),
+                      if (data['urgent'] == true)
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                          child: const Text('緊急',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      if (data['isOrganization'] == true)
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(10)),
+                          child: const Text('団体',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
 
-                    style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                      _StatusBadge(status: data['status'] ?? 'lost'),
+                    ],
                   ),
-                ),
-              ] else ...[
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _reportLostPost(context, postId, data['uid'] ?? '');
-                    },
-                    icon: const Icon(Icons.flag_outlined, color: Colors.grey, size: 18),
-                    label: const Text('この投稿を通報する', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 10),
+                  Text(data['petName'] ?? '',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+                  const SizedBox(height: 4),
+                  Text(data['animalType'] ?? '', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                  const Divider(height: 32),
+                  _InfoRow(Icons.location_on_rounded, data['location'] ?? ''),
+                  const SizedBox(height: 8),
+                  _InfoRow(Icons.calendar_today_rounded, data['date'] ?? ''),
+                  if ((data['reward'] ?? '').toString().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _InfoRow(Icons.card_giftcard_rounded, 'お礼：${data['reward']}'),
+                  ],
+                  const SizedBox(height: 20),
+                  if ((data['description'] ?? '').toString().isNotEmpty) ...[
+                    const Text('詳細', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 6),
+                    Text(data['description'], style: const TextStyle(fontSize: 14, height: 1.5)),
+                    const SizedBox(height: 20),
+                  ],
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF3498DB).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('連絡先', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const SizedBox(height: 6),
+                        Text(
+                            (data['contact'] ?? '').toString().isNotEmpty
+                                ? data['contact']
+                                : '投稿者：${data['posterName'] ?? ''}',
+                            style: const TextStyle(fontSize: 14, height: 1.5)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ],
+                  if (isMine) ...[
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final newStatus = data['status'] == 'resolved' ? 'lost' : 'resolved';
+                          await FirebaseFirestore.instance
+                              .collection('lostPets')
+                              .doc(postId)
+                              .update({'status': newStatus});
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Color(0xFF2D6A4F)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                        child: Text(
+                            data['status'] == 'resolved' ? '「未解決」に戻す' : '「見つかりました」にする',
+                            style: const TextStyle(color: Color(0xFF2D6A4F), fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: const Text('投稿を削除しますか？'),
+                              content: const Text('この操作は取り消せません。'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('キャンセル', style: TextStyle(color: Colors.grey)),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                                  child: const Text('削除'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await FirebaseFirestore.instance.collection('lostPets').doc(postId).delete();
+                            if (context.mounted) Navigator.pop(context);
+                          }
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                        label: const Text('削除する', style: TextStyle(color: Colors.red)),
+
+                        style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: Colors.red),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _reportLostPost(context, postId, data['uid'] ?? '');
+                        },
+                        icon: const Icon(Icons.flag_outlined, color: Colors.grey, size: 18),
+                        label: const Text('この投稿を通報する', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
-    ),
-              ],
-          ),
       ),
     ),
   );
@@ -287,180 +287,180 @@ class LostPetPage extends StatefulWidget {
 }
 
 class _LostPetPageState extends State<LostPetPage> {
-  String _filter = 'mine';
-bool _hasOpenedInitial = false;
+  String _filter = 'all';
+  bool _hasOpenedInitial = false;
 
-Future<void> _openInitialPost() async {
-if (widget.initialPostId == null || _hasOpenedInitial) return;
-_hasOpenedInitial = true;
-final doc = await FirebaseFirestore.instance
-.collection('lostPets')
-.doc(widget.initialPostId)
-.get();
-if (doc.exists && mounted) {
-showLostPetDetail(context, doc.data() as Map<String, dynamic>, doc.id);
-}
-}
+  Future<void> _openInitialPost() async {
+    if (widget.initialPostId == null || _hasOpenedInitial) return;
+    _hasOpenedInitial = true;
+    final doc = await FirebaseFirestore.instance
+        .collection('lostPets')
+        .doc(widget.initialPostId)
+        .get();
+    if (doc.exists && mounted) {
+      showLostPetDetail(context, doc.data() as Map<String, dynamic>, doc.id);
+    }
+  }
 
-@override
-Widget build(BuildContext context) {
-WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialPost());
-return Scaffold(
-backgroundColor: const Color(0xFFFFF8F5),
-appBar: AppBar(
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialPost());
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF8F5),
+      appBar: AppBar(
 
-title: const Text('迷子情報 🔍',
-style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
-backgroundColor: const Color(0xFFFFF8F5),
-elevation: 0,
-actions: [
-IconButton(
-onPressed: () => showLostPetPostSheet(context),
-icon: const Icon(Icons.add_circle_rounded, color: Color(0xFF3498DB), size: 28),
-),
-],
-),
-body: Column(
-children: [
-Padding(
-padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-child: SingleChildScrollView(
-scrollDirection: Axis.horizontal,
-child: Row(
-children: [
-_FilterChip(label: 'すべて', value: 'all', selected: _filter, onTap: (v) => setState(() => _filter = v)),
-_FilterChip(label: '迷子中', value: 'lost', selected: _filter, onTap: (v) => setState(() => _filter = v)),
-_FilterChip(label: '見つかりました', value: 'resolved', selected: _filter, onTap: (v) => setState(() => _filter = v)),
-_FilterChip(label: '緊急', value: 'urgent', selected: _filter, onTap: (v) => setState(() => _filter = v)),
-  _FilterChip(label: 'マイ投稿', value: 'mine', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+        title: const Text('迷子情報 🔍',
+            style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+        backgroundColor: const Color(0xFFFFF8F5),
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: () => showLostPetPostSheet(context),
+            icon: const Icon(Icons.add_circle_rounded, color: Color(0xFF3498DB), size: 28),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(label: 'すべて', value: 'all', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  _FilterChip(label: '迷子中', value: 'lost', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  _FilterChip(label: '見つかりました', value: 'resolved', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  _FilterChip(label: '緊急', value: 'urgent', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                  _FilterChip(label: 'マイ投稿', value: 'mine', selected: _filter, onTap: (v) => setState(() => _filter = v)),
 
-],
-),
-),
-),
-  Expanded(
-    child: StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('lostPets')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF3498DB)));
-        }
-        final myUid = FirebaseAuth.instance.currentUser?.uid;
-        var docs = snapshot.data!.docs;
-        if (_filter == 'urgent') {
-          docs = docs.where((d) => (d.data() as Map<String, dynamic>)['urgent'] == true).toList();
-        } else if (_filter == 'mine') {
-          docs = docs.where((d) => (d.data() as Map<String, dynamic>)['uid'] == myUid).toList();
-        } else if (_filter != 'all') {
-          docs = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == _filter).toList();
-        }
-
-        if (docs.isEmpty) {
-
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Text('該当する投稿はありません', style: TextStyle(color: Colors.grey)),
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: docs.length,
-          itemBuilder: (_, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            final postId = docs[i].id;
-            final isMinePost = data['uid'] == myUid;
-            return GestureDetector(
-              onTap: () => showLostPetDetail(context, data, postId),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  color: isMinePost ? const Color(0xFF3498DB).withOpacity(0.06) : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: isMinePost
-                      ? Border.all(color: const Color(0xFF3498DB), width: 1.5)
-                      : data['urgent'] == true ? Border.all(color: Colors.red[300]!) : null,
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty
-                            ? Image.network(data['imageUrl'] as String, width: 80, height: 80, fit: BoxFit.cover)
-                            : Container(
-                          width: 80, height: 80,
-                          color: const Color(0xFF3498DB).withOpacity(0.1),
-                          child: Center(child: Text(data['emoji'] ?? '🐾', style: const TextStyle(fontSize: 32))),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                if (isMinePost)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: const Color(0xFF3498DB), borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('自分の投稿', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
-                                if (data['isOrganization'] == true)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('団体', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
-
-                                if (data['urgent'] == true)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('緊急', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
-                                _StatusBadge(status: data['status'] ?? 'lost'),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(data['petName'] ?? '',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF3D2B1F))),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Icon(Icons.location_on_rounded, size: 12, color: Colors.grey),
-                                const SizedBox(width: 4),
-                                Expanded(child: Text(data['location'] ?? '', style: TextStyle(fontSize: 11, color: Colors.grey[600]), overflow: TextOverflow.ellipsis)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                ],
               ),
-            );
-          },
-        );
-      },
-    ),
-  ),
-],
-),
-);
-}
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('lostPets')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF3498DB)));
+                }
+                final myUid = FirebaseAuth.instance.currentUser?.uid;
+                var docs = snapshot.data!.docs;
+                if (_filter == 'urgent') {
+                  docs = docs.where((d) => (d.data() as Map<String, dynamic>)['urgent'] == true).toList();
+                } else if (_filter == 'mine') {
+                  docs = docs.where((d) => (d.data() as Map<String, dynamic>)['uid'] == myUid).toList();
+                } else if (_filter != 'all') {
+                  docs = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == _filter).toList();
+                }
+
+                if (docs.isEmpty) {
+
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('該当する投稿はありません', style: TextStyle(color: Colors.grey)),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final postId = docs[i].id;
+                    final isMinePost = data['uid'] == myUid;
+                    return GestureDetector(
+                      onTap: () => showLostPetDetail(context, data, postId),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: isMinePost ? const Color(0xFF3498DB).withOpacity(0.06) : Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: isMinePost
+                              ? Border.all(color: const Color(0xFF3498DB), width: 1.5)
+                              : data['urgent'] == true ? Border.all(color: Colors.red[300]!) : null,
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty
+                                    ? Image.network(data['imageUrl'] as String, width: 80, height: 80, fit: BoxFit.cover)
+                                    : Container(
+                                  width: 80, height: 80,
+                                  color: const Color(0xFF3498DB).withOpacity(0.1),
+                                  child: Center(child: Text(data['emoji'] ?? '🐾', style: const TextStyle(fontSize: 32))),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        if (isMinePost)
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: const Color(0xFF3498DB), borderRadius: BorderRadius.circular(6)),
+                                            child: const Text('自分の投稿', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                                          ),
+                                        if (data['isOrganization'] == true)
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(6)),
+                                            child: const Text('団体', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                                          ),
+
+                                        if (data['urgent'] == true)
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                                            child: const Text('緊急', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                                          ),
+                                        _StatusBadge(status: data['status'] ?? 'lost'),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(data['petName'] ?? '',
+                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF3D2B1F))),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.location_on_rounded, size: 12, color: Colors.grey),
+                                        const SizedBox(width: 4),
+                                        Expanded(child: Text(data['location'] ?? '', style: TextStyle(fontSize: 11, color: Colors.grey[600]), overflow: TextOverflow.ellipsis)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 class _FilterChip extends StatelessWidget {
   final String label;
