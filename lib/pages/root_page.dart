@@ -4,6 +4,8 @@ import 'chat_list_page.dart';
 import 'profile_page.dart';
 import 'event_page.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'animal_map_page.dart';
 
@@ -45,6 +47,16 @@ class _RootPageState extends State<RootPage> {
       badge: true,
       sound: true,
     );
+
+    final token = await messaging.getToken();
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (token != null && user != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({'fcmToken': token});
+    }
   }
 
 

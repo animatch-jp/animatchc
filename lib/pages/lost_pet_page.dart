@@ -287,7 +287,7 @@ class LostPetPage extends StatefulWidget {
 }
 
 class _LostPetPageState extends State<LostPetPage> {
-String _filter = 'all';
+  String _filter = 'mine';
 bool _hasOpenedInitial = false;
 
 Future<void> _openInitialPost() async {
@@ -332,6 +332,8 @@ _FilterChip(label: 'すべて', value: 'all', selected: _filter, onTap: (v) => s
 _FilterChip(label: '迷子中', value: 'lost', selected: _filter, onTap: (v) => setState(() => _filter = v)),
 _FilterChip(label: '見つかりました', value: 'resolved', selected: _filter, onTap: (v) => setState(() => _filter = v)),
 _FilterChip(label: '緊急', value: 'urgent', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+  _FilterChip(label: 'マイ投稿', value: 'mine', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+
 ],
 ),
 ),
@@ -346,15 +348,18 @@ _FilterChip(label: '緊急', value: 'urgent', selected: _filter, onTap: (v) => s
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: Color(0xFF3498DB)));
         }
+        final myUid = FirebaseAuth.instance.currentUser?.uid;
         var docs = snapshot.data!.docs;
         if (_filter == 'urgent') {
           docs = docs.where((d) => (d.data() as Map<String, dynamic>)['urgent'] == true).toList();
+        } else if (_filter == 'mine') {
+          docs = docs.where((d) => (d.data() as Map<String, dynamic>)['uid'] == myUid).toList();
         } else if (_filter != 'all') {
           docs = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == _filter).toList();
         }
 
-        final myUid = FirebaseAuth.instance.currentUser?.uid;
         if (docs.isEmpty) {
+
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(32),

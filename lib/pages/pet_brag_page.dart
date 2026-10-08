@@ -2022,8 +2022,7 @@ fontWeight: FontWeight.bold)),
 }).toList(),
 ),
 ),
-Expanded(
-child: StreamBuilder<QuerySnapshot>(
+StreamBuilder<QuerySnapshot>(
 stream: FirebaseFirestore.instance
 .collection('petBrags')
 .where('createdAt', isGreaterThan: Timestamp.fromDate(weekAgo))
@@ -2140,12 +2139,12 @@ return GestureDetector(
 );
 },
 ),
-),
 ],
 );
 }
 }
 class _MonthlyBestList extends StatelessWidget {
+
 const _MonthlyBestList();
 
 @override
@@ -2261,7 +2260,7 @@ fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
 ],
 ),
 Padding(
-padding: const EdgeInsets.all(8),
+padding: const EdgeInsets.all(6),
 child: Column(
 mainAxisSize: MainAxisSize.min,
 crossAxisAlignment: CrossAxisAlignment.start,

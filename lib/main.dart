@@ -2,12 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'dart:ui';
 import 'pages/splash_page.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+}
+
+Future<void> _setupPushNotifications() async {
+  final messaging = FirebaseMessaging.instance;
+
+  await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  final token = await messaging.getToken();
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (token != null && user != null) {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .update({'fcmToken': token});
+  }
+
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print('📩 通知を受信: ${message.notification?.title}');
+  });
 }
 
 void main() async {

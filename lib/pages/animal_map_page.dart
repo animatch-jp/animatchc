@@ -1093,6 +1093,8 @@ class _LostListState extends State<_LostList> {
                 _LostFilterChip(label: '迷子中', value: 'lost', selected: _filter, onTap: (v) => setState(() => _filter = v)),
                 _LostFilterChip(label: '見つかりました', value: 'resolved', selected: _filter, onTap: (v) => setState(() => _filter = v)),
                 _LostFilterChip(label: '緊急', value: 'urgent', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+                _LostFilterChip(label: 'マイ投稿', value: 'mine', selected: _filter, onTap: (v) => setState(() => _filter = v)),
+
               ],
             ),
           ),
@@ -1109,9 +1111,12 @@ class _LostListState extends State<_LostList> {
                 child: Center(child: CircularProgressIndicator(color: Color(0xFF3498DB))),
               );
             }
+            final myUid = FirebaseAuth.instance.currentUser?.uid;
             var docs = snapshot.data!.docs;
             if (_filter == 'urgent') {
               docs = docs.where((d) => (d.data() as Map<String, dynamic>)['urgent'] == true).toList();
+            } else if (_filter == 'mine') {
+              docs = docs.where((d) => (d.data() as Map<String, dynamic>)['uid'] == myUid).toList();
             } else if (_filter != 'all') {
               docs = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == _filter).toList();
             }
@@ -1121,7 +1126,7 @@ class _LostListState extends State<_LostList> {
                 child: Text('該当する投稿はありません', style: TextStyle(color: Colors.grey[500])),
               );
             }
-            final myUid = FirebaseAuth.instance.currentUser?.uid;
+
             return Column(
               children: docs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
