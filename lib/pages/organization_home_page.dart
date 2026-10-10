@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,8 +9,6 @@ import 'prefectures.dart';
 import 'notification_page.dart';
 import 'lost_pet_page.dart';
 
-
-
 class OrganizationHomePage extends StatefulWidget {
   const OrganizationHomePage({super.key});
 
@@ -18,550 +17,781 @@ class OrganizationHomePage extends StatefulWidget {
 }
 
 class _OrganizationHomePageState extends State<OrganizationHomePage> {
-Map<String, dynamic>? _orgData;
-bool _isLoading = true;
+  Map<String, dynamic>? _orgData;
+  bool _isLoading = true;
 
-@override
-void initState() {
-super.initState();
-_loadOrgData();
-}
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSub;
+  Timer? _ticker;
+  int _unreadTotal = 0;
+  int _waitingCount = 0;
+  int _overdueCount = 0;
 
-Future<void> _loadOrgData() async {
-final uid = FirebaseAuth.instance.currentUser?.uid;
-if (uid == null) return;
-final doc = await FirebaseFirestore.instance
-.collection('organizations')
-.doc(uid)
-.get();
-if (mounted) {
-setState(() {
-_orgData = doc.data();
-_isLoading = false;
-});
-}
-}
+  @override
+  void initState() {
+    super.initState();
+    _loadOrgData();
+    _listenChats();
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
-void _showAdoptionPostSheet() {
-showModalBottomSheet(
-context: context,
-isScrollControlled: true,
-shape: const RoundedRectangleBorder(
-borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-builder: (_) => Padding(
-padding:
-EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-child: _AdoptionPostSheet(
-orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
-orgName: _orgData?['name'] ?? '',
-onPosted: () {
-Navigator.pop(context);
-},
-),
-),
-);
-}
-void _showEditOrgSheet() {
-showModalBottomSheet(
-context: context,
-isScrollControlled: true,
-shape: const RoundedRectangleBorder(
-borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-builder: (_) => Padding(
-padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-child: _EditOrgSheet(
-orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
-currentData: _orgData ?? {},
-onSaved: () {
-Navigator.pop(context);
-_loadOrgData();
-},
-),
-),
-);
-}
+  @override
+  void dispose() {
+    _chatSub?.cancel();
+    _ticker?.cancel();
+    super.dispose();
+  }
 
+  Future<void> _loadOrgData() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final doc = await FirebaseFirestore.instance
+        .collection('organizations')
+        .doc(uid)
+        .get();
+    if (mounted) {
+      setState(() {
+        _orgData = doc.data();
+        _isLoading = false;
+      });
+    }
+  }
 
-void _showVolunteerPostSheet() {
-showModalBottomSheet(
-context: context,
-isScrollControlled: true,
-shape: const RoundedRectangleBorder(
-borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-builder: (_) => Padding(
-padding:
-EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-child: _VolunteerPostSheet(
-orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
-orgName: _orgData?['name'] ?? '',
-onPosted: () {
-Navigator.pop(context);
-},
-),
-),
-);
-}
+  void _listenChats() {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (myUid == null) return;
+    _chatSub = FirebaseFirestore.instance
+        .collection('chats')
+        .where('participants', arrayContains: myUid)
+        .snapshots()
+        .listen((snap) {
+      var unread = 0;
+      var waiting = 0;
+      var overdue = 0;
+      final now = DateTime.now();
+      for (final doc in snap.docs) {
+        final data = doc.data();
 
-Future<void> _logout() async {
-await FirebaseAuth.instance.signOut();
-if (mounted) {
-Navigator.pushAndRemoveUntil(
-context,
-MaterialPageRoute(builder: (_) => const LoginPage()),
-(route) => false,
-);
-}
-}
-
-@override
-Widget build(BuildContext context) {
-if (_isLoading) {
-return const Scaffold(
-body: Center(
-child: CircularProgressIndicator(color: Color(0xFFE8845A))),
-);
-}
-
-return Scaffold(
-backgroundColor: const Color(0xFFFFF8F5),
-appBar: AppBar(
-title: const Text('団体マイページ 🏢',
-style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
-backgroundColor: const Color(0xFFFFF8F5),
-elevation: 0,
-automaticallyImplyLeading: false,
-  actions: [
-    IconButton(
-      onPressed: () => Navigator.push(context,
-          MaterialPageRoute(
-              builder: (_) => const NotificationPage())),
-      icon: const Icon(Icons.notifications_outlined,
-          color: Color(0xFFE8845A)),
-    ),
-    IconButton(
-      onPressed: () => Navigator.push(context,
-          MaterialPageRoute(
-              builder: (_) => const OrganizationChatListPage())),
-      icon: const Icon(Icons.chat_bubble_outline_rounded,
-          color: Color(0xFFE8845A)),
-    ),
-
-    IconButton(
-      onPressed: () async {
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: const Text('ログアウトしますか？'),
-            content: const Text('もう一度ログインが必要になります'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('キャンセル',
-                    style: TextStyle(color: Colors.grey)),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE8845A),
-                    foregroundColor: Colors.white),
-                child: const Text('ログアウト'),
-              ),
-            ],
-          ),
-        );
-        if (confirm == true) {
-          _logout();
+        final unreadMap = data['unread'];
+        if (unreadMap is Map) {
+          final v = unreadMap[myUid];
+          if (v is num) unread += v.toInt();
         }
-      },
-      icon: const Icon(Icons.logout_rounded, color: Color(0xFFE8845A)),
-    ),
-  ],
 
-),
-body: Padding(
-padding: const EdgeInsets.all(20),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-  Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(
-          colors: [Color(0xFFE8845A), Color(0xFFF4A261)]),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(_orgData?['name'] ?? '',
-                  style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white)),
-            ),
-            IconButton(
-              onPressed: _showEditOrgSheet,
-              icon: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
-            ),
-          ],
+        if (data['status'] == 'done') continue;
+        final lastSender = data['lastSenderId'] as String?;
+        // 古いチャット（lastSenderIdなし）は数えない
+        if (lastSender == null || lastSender == myUid) continue;
+        waiting++;
+        final at = data['lastMessageAt'];
+        if (at is Timestamp && now.difference(at.toDate()).inHours >= 24) {
+          overdue++;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _unreadTotal = unread;
+        _waitingCount = waiting;
+        _overdueCount = overdue;
+      });
+    }, onError: (_) {});
+  }
+
+  void _showAdoptionPostSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding:
+        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: _AdoptionPostSheet(
+          orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
+          orgName: _orgData?['name'] ?? '',
+          onPosted: () {
+            Navigator.pop(context);
+          },
         ),
-        if ((_orgData?['nameUpdatePending'] ?? '').toString().isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(8)),
-            child: const Text('団体名の変更を確認中です',
-                style: TextStyle(fontSize: 10, color: Colors.white)),
-          ),
-        const SizedBox(height: 8),
-        Text(_orgData?['activityDescription'] ?? '',
-            style: const TextStyle(
-                fontSize: 13, color: Colors.white70, height: 1.5)),
-        if ((_orgData?['activityUpdatePending'] ?? '').toString().isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(8)),
-            child: const Text('活動内容の変更を確認中です',
-                style: TextStyle(fontSize: 10, color: Colors.white)),
-          ),
-      ],
-    ),
-  ),
-  const SizedBox(height: 24),
-
-const Text('投稿管理',
-style: TextStyle(
-fontSize: 16,
-fontWeight: FontWeight.bold,
-color: Color(0xFF3D2B1F))),
-const SizedBox(height: 12),
-GestureDetector(
-onTap: _showAdoptionPostSheet,
-child: Container(
-width: double.infinity,
-padding: const EdgeInsets.all(16),
-decoration: BoxDecoration(
-gradient: const LinearGradient(
-colors: [Color(0xFF2D6A4F), Color(0xFF52B788)]),
-borderRadius: BorderRadius.circular(16)),
-child: const Row(
-children: [
-Text('🐾', style: TextStyle(fontSize: 24)),
-SizedBox(width: 12),
-Expanded(
-child: Text('里親募集を投稿する',
-style: TextStyle(
-fontSize: 15,
-fontWeight: FontWeight.bold,
-color: Colors.white)),
-),
-Icon(Icons.arrow_forward_ios_rounded,
-color: Colors.white, size: 16),
-],
-),
-),
-),
-const SizedBox(height: 12),
-GestureDetector(
-onTap: _showVolunteerPostSheet,
-child: Container(
-width: double.infinity,
-padding: const EdgeInsets.all(16),
-decoration: BoxDecoration(
-gradient: const LinearGradient(
-colors: [Color(0xFFE8845A), Color(0xFFF4A261)]),
-borderRadius: BorderRadius.circular(16)),
-child: const Row(
-children: [
-Text('🤝', style: TextStyle(fontSize: 24)),
-SizedBox(width: 12),
-Expanded(
-child: Text('ボランティア募集を投稿する',
-style: TextStyle(
-fontSize: 15,
-fontWeight: FontWeight.bold,
-color: Colors.white)),
-),
-Icon(Icons.arrow_forward_ios_rounded,
-color: Colors.white, size: 16),
-],
-),
-),
-),
-const SizedBox(height: 24),
-  GestureDetector(
-    onTap: () => Navigator.push(context,
-        MaterialPageRoute(builder: (_) => const LostPetPage())),
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: const Color(0xFF3498DB),
-          borderRadius: BorderRadius.circular(16)),
-      child: const Row(
-        children: [
-          Text('🔍', style: TextStyle(fontSize: 24)),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text('迷子情報を見る・投稿する',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white)),
-          ),
-          Icon(Icons.arrow_forward_ios_rounded,
-              color: Colors.white, size: 16),
-        ],
-      ),
-    ),
-  ),
-
-const Text('投稿した里親募集',
-style: TextStyle(
-fontSize: 16,
-fontWeight: FontWeight.bold,
-color: Color(0xFF3D2B1F))),
-const SizedBox(height: 12),
-SizedBox(
-height: 160,
-child: StreamBuilder<QuerySnapshot>(
-stream: FirebaseFirestore.instance
-.collection('adoptions')
-.where('orgId',
-isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-.orderBy('createdAt', descending: true)
-.snapshots(),
-builder: (context, snapshot) {
-if (!snapshot.hasData) {
-return const Center(
-child: CircularProgressIndicator(
-color: Color(0xFFE8845A)));
-}
-final docs = snapshot.data!.docs;
-if (docs.isEmpty) {
-return const Center(
-child: Text('まだ投稿がありません🐾',
-style: TextStyle(color: Colors.grey)),
-);
-}
-return ListView.builder(
-  itemCount: docs.length,
-  itemBuilder: (_, i) {
-    final data = docs[i].data() as Map<String, dynamic>;
-    final docId = docs[i].id;
-    final isAdopted = data['status'] == 'adopted';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: data['imageUrl'] != null &&
-                    (data['imageUrl'] as String).isNotEmpty
-                    ? Image.network(data['imageUrl'],
-                    width: 56, height: 56, fit: BoxFit.cover)
-                    : Container(
-                  width: 56,
-                  height: 56,
-                  color: Colors.orange[50],
-                  child: const Center(child: Text('🐾')),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(data['petName'] ?? '',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                        if (isAdopted)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: const Color(0xFF2D6A4F), borderRadius: BorderRadius.circular(6)),
-                            child: const Text('里親決定', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
-                          ),
-                      ],
-                    ),
-                    Text(data['type'] ?? '',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600])),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('adoptions')
-                    .doc(docId)
-                    .update({'status': isAdopted ? 'available' : 'adopted'});
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: isAdopted ? Colors.grey[700] : const Color(0xFF2D6A4F),
-                side: BorderSide(color: isAdopted ? Colors.grey[400]! : const Color(0xFF2D6A4F)),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              child: Text(isAdopted ? '募集中に戻す' : '里親が決まりました', style: const TextStyle(fontSize: 12)),
-            ),
-          ),
-        ],
       ),
     );
-  },
-);
+  }
 
-},
-),
-),
-  const SizedBox(height: 20),
-  const Text('投稿したボランティア募集',
-      style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFF3D2B1F))),
-  const SizedBox(height: 12),
-  Expanded(
-    child: StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('volunteers')
-          .where('orgId',
-          isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: Color(0xFFE8845A)));
-        }
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return const Center(
-            child: Text('まだ投稿がありません🤝',
-                style: TextStyle(color: Colors.grey)),
-          );
-        }
-        return ListView.builder(
-          itemCount: docs.length,
-          itemBuilder: (_, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            final docId = docs[i].id;
-            final isClosed = data['status'] == 'closed';
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
+  void _showEditOrgSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding:
+        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: _EditOrgSheet(
+          orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
+          currentData: _orgData ?? {},
+          onSaved: () {
+            Navigator.pop(context);
+            _loadOrgData();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showVolunteerPostSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding:
+        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: _VolunteerPostSheet(
+          orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
+          orgName: _orgData?['name'] ?? '',
+          onPosted: () {
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+            (route) => false,
+      );
+    }
+  }
+
+  void _openChatList() {
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => const OrganizationChatListPage()));
+  }
+
+  Widget _chatIconWithBadge() {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          onPressed: _openChatList,
+          icon: const Icon(Icons.chat_bubble_outline_rounded,
+              color: Color(0xFFE8845A)),
+        ),
+        if (_unreadTotal > 0)
+          Positioned(
+            right: 4,
+            top: 4,
+            child: IgnorePointer(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: const Color(0xFFFFF8F5), width: 1.5),
+                ),
+                child: Center(
+                  child: Text(_unreadTotal > 99 ? '99+' : '$_unreadTotal',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _todayCard() {
+    final hasWork = _waitingCount > 0;
+    final Color color = _overdueCount > 0
+        ? Colors.red
+        : hasWork
+        ? const Color(0xFFE8845A)
+        : const Color(0xFF2D6A4F);
+    final String title = hasWork ? '今日やること' : '今日は対応待ちなし';
+    final String body = hasWork
+        ? '未返信の問い合わせが $_waitingCount 件あります'
+        : 'すべての問い合わせに返信できています 🎉';
+
+    return GestureDetector(
+      onTap: _openChatList,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14)),
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(hasWork ? '📬' : '✅',
+                    style: const TextStyle(fontSize: 22)),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: color)),
+                  const SizedBox(height: 2),
+                  Text(body,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF3D2B1F))),
+                  if (_overdueCount > 0) ...[
+                    const SizedBox(height: 2),
+                    Text('うち $_overdueCount 件は24時間以上たっています',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 16, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+            child: CircularProgressIndicator(color: Color(0xFFE8845A))),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF8F5),
+      appBar: AppBar(
+        title: const Text('団体マイページ 🏢',
+            style:
+            TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+        backgroundColor: const Color(0xFFFFF8F5),
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const NotificationPage())),
+            icon: const Icon(Icons.notifications_outlined,
+                color: Color(0xFFE8845A)),
+          ),
+          _chatIconWithBadge(),
+          IconButton(
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  title: const Text('ログアウトしますか？'),
+                  content: const Text('もう一度ログインが必要になります'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('キャンセル',
+                          style: TextStyle(color: Colors.grey)),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE8845A),
+                          foregroundColor: Colors.white),
+                      child: const Text('ログアウト'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                _logout();
+              }
+            },
+            icon: const Icon(Icons.logout_rounded, color: Color(0xFFE8845A)),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [Color(0xFFE8845A), Color(0xFFF4A261)]),
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: data['imageUrl'] != null &&
-                            (data['imageUrl'] as String).isNotEmpty
-                            ? Image.network(data['imageUrl'],
-                            width: 56, height: 56, fit: BoxFit.cover)
-                            : Container(
-                          width: 56,
-                          height: 56,
-                          color: const Color(0xFFE8845A).withOpacity(0.1),
-                          child: const Center(child: Text('🤝')),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
+                        child: Text(_orgData?['name'] ?? '',
+                            style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white)),
+                      ),
+                      IconButton(
+                        onPressed: _showEditOrgSheet,
+                        icon: const Icon(Icons.edit_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                    ],
+                  ),
+                  if ((_orgData?['nameUpdatePending'] ?? '')
+                      .toString()
+                      .isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Text('団体名の変更を確認中です',
+                          style: TextStyle(fontSize: 10, color: Colors.white)),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(_orgData?['activityDescription'] ?? '',
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.white70, height: 1.5)),
+                  if ((_orgData?['activityUpdatePending'] ?? '')
+                      .toString()
+                      .isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Text('活動内容の変更を確認中です',
+                          style: TextStyle(fontSize: 10, color: Colors.white)),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _todayCard(),
+            const Text('投稿管理',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3D2B1F))),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _showAdoptionPostSheet,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFF2D6A4F), Color(0xFF52B788)]),
+                    borderRadius: BorderRadius.circular(16)),
+                child: const Row(
+                  children: [
+                    Text('🐾', style: TextStyle(fontSize: 24)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text('里親募集を投稿する',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        color: Colors.white, size: 16),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _showVolunteerPostSheet,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFFE8845A), Color(0xFFF4A261)]),
+                    borderRadius: BorderRadius.circular(16)),
+                child: const Row(
+                  children: [
+                    Text('🤝', style: TextStyle(fontSize: 24)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text('ボランティア募集を投稿する',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        color: Colors.white, size: 16),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const LostPetPage())),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: const Color(0xFF3498DB),
+                    borderRadius: BorderRadius.circular(16)),
+                child: const Row(
+                  children: [
+                    Text('🔍', style: TextStyle(fontSize: 24)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text('迷子情報を見る・投稿する',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
+                    ),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        color: Colors.white, size: 16),
+                  ],
+                ),
+              ),
+            ),
+            const Text('投稿した里親募集',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3D2B1F))),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 160,
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('adoptions')
+                    .where('orgId',
+                    isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                    .orderBy('createdAt', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFFE8845A)));
+                  }
+                  final docs = snapshot.data!.docs;
+                  if (docs.isEmpty) {
+                    return const Center(
+                      child: Text('まだ投稿がありません🐾',
+                          style: TextStyle(color: Colors.grey)),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (_, i) {
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final docId = docs[i].id;
+                      final isAdopted = data['status'] == 'adopted';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Expanded(
-                                  child: Text(data['title'] ?? '',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                                if (isClosed)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: Colors.grey, borderRadius: BorderRadius.circular(6)),
-                                    child: const Text('締切', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: data['imageUrl'] != null &&
+                                      (data['imageUrl'] as String)
+                                          .isNotEmpty
+                                      ? Image.network(data['imageUrl'],
+                                      width: 56,
+                                      height: 56,
+                                      fit: BoxFit.cover)
+                                      : Container(
+                                    width: 56,
+                                    height: 56,
+                                    color: Colors.orange[50],
+                                    child: const Center(child: Text('🐾')),
                                   ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(data['petName'] ?? '',
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                    FontWeight.bold)),
+                                          ),
+                                          if (isAdopted)
+                                            Container(
+                                              padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2),
+                                              decoration: BoxDecoration(
+                                                  color:
+                                                  const Color(0xFF2D6A4F),
+                                                  borderRadius:
+                                                  BorderRadius.circular(
+                                                      6)),
+                                              child: const Text('里親決定',
+                                                  style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                      FontWeight.bold)),
+                                            ),
+                                        ],
+                                      ),
+                                      Text(data['type'] ?? '',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600])),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
-                            Text(data['location'] ?? '',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600])),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await FirebaseFirestore.instance
+                                      .collection('adoptions')
+                                      .doc(docId)
+                                      .update({
+                                    'status':
+                                    isAdopted ? 'available' : 'adopted'
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: isAdopted
+                                      ? Colors.grey[700]
+                                      : const Color(0xFF2D6A4F),
+                                  side: BorderSide(
+                                      color: isAdopted
+                                          ? Colors.grey[400]!
+                                          : const Color(0xFF2D6A4F)),
+                                  padding:
+                                  const EdgeInsets.symmetric(vertical: 8),
+                                ),
+                                child: Text(
+                                    isAdopted ? '募集中に戻す' : '里親が決まりました',
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        await FirebaseFirestore.instance
-                            .collection('volunteers')
-                            .doc(docId)
-                            .update({'status': isClosed ? 'open' : 'closed'});
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: isClosed ? const Color(0xFF2D6A4F) : Colors.grey[700],
-                        side: BorderSide(color: isClosed ? const Color(0xFF2D6A4F) : Colors.grey[400]!),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      child: Text(isClosed ? '募集を再開する' : '募集を締め切る', style: const TextStyle(fontSize: 12)),
-                    ),
-                  ),
-                ],
+                      );
+                    },
+                  );
+                },
               ),
-            );
-          },
-        );
+            ),
+            const SizedBox(height: 20),
+            const Text('投稿したボランティア募集',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF3D2B1F))),
+            const SizedBox(height: 12),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('volunteers')
+                    .where('orgId',
+                    isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                    .orderBy('createdAt', descending: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFFE8845A)));
+                  }
+                  final docs = snapshot.data!.docs;
+                  if (docs.isEmpty) {
+                    return const Center(
+                      child: Text('まだ投稿がありません🤝',
+                          style: TextStyle(color: Colors.grey)),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (_, i) {
+                      final data = docs[i].data() as Map<String, dynamic>;
+                      final docId = docs[i].id;
+                      final isClosed = data['status'] == 'closed';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: data['imageUrl'] != null &&
+                                      (data['imageUrl'] as String)
+                                          .isNotEmpty
+                                      ? Image.network(data['imageUrl'],
+                                      width: 56,
+                                      height: 56,
+                                      fit: BoxFit.cover)
+                                      : Container(
+                                    width: 56,
+                                    height: 56,
+                                    color: const Color(0xFFE8845A)
+                                        .withOpacity(0.1),
+                                    child: const Center(child: Text('🤝')),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(data['title'] ?? '',
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                    FontWeight.bold)),
+                                          ),
+                                          if (isClosed)
+                                            Container(
+                                              padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2),
+                                              decoration: BoxDecoration(
+                                                  color: Colors.grey,
+                                                  borderRadius:
+                                                  BorderRadius.circular(
+                                                      6)),
+                                              child: const Text('締切',
+                                                  style: TextStyle(
+                                                      fontSize: 9,
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                      FontWeight.bold)),
+                                            ),
+                                        ],
+                                      ),
+                                      Text(data['location'] ?? '',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600])),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  await FirebaseFirestore.instance
+                                      .collection('volunteers')
+                                      .doc(docId)
+                                      .update({
+                                    'status': isClosed ? 'open' : 'closed'
+                                  });
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: isClosed
+                                      ? const Color(0xFF2D6A4F)
+                                      : Colors.grey[700],
+                                  side: BorderSide(
+                                      color: isClosed
+                                          ? const Color(0xFF2D6A4F)
+                                          : Colors.grey[400]!),
+                                  padding:
+                                  const EdgeInsets.symmetric(vertical: 8),
+                                ),
+                                child: Text(
+                                    isClosed ? '募集を再開する' : '募集を締め切る',
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-      },
-    ),
-  ),
-],
-),
-),
-);
-}
-}
 class _AdoptionPostSheet extends StatefulWidget {
   final String orgId;
   final String orgName;
@@ -649,14 +879,16 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
                   borderRadius: BorderRadius.circular(16)),
               child: _isUploading
                   ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+                  child:
+                  CircularProgressIndicator(color: Color(0xFFE8845A)))
                   : _imageUrl != null
                   ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Image.network(_imageUrl!,
                       width: double.infinity, fit: BoxFit.cover))
                   : const Center(
-                  child: Text('📸 写真を選ぶ', style: TextStyle(color: Colors.grey))),
+                  child: Text('📸 写真を選ぶ',
+                      style: TextStyle(color: Colors.grey))),
             ),
           ),
           const SizedBox(height: 16),
@@ -665,7 +897,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
             maxLength: 20,
             decoration: InputDecoration(
               labelText: '名前 *',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -674,7 +907,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
             maxLength: 30,
             decoration: InputDecoration(
               labelText: '種類（犬・猫など） *',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -683,7 +917,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
             maxLength: 15,
             decoration: InputDecoration(
               labelText: '年齢',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -696,7 +931,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
               return GestureDetector(
                 onTap: () => setState(() => _gender = g),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                       color: sel ? const Color(0xFF2D6A4F) : Colors.grey[100],
                       borderRadius: BorderRadius.circular(20)),
@@ -714,7 +950,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
             maxLength: 500,
             decoration: InputDecoration(
               labelText: '性格・特徴',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -724,7 +961,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
             maxLength: 800,
             decoration: InputDecoration(
               labelText: '保護に至った経緯',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -734,7 +972,8 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
             maxLength: 500,
             decoration: InputDecoration(
               labelText: '希望する里親の条件',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 20),
@@ -745,12 +984,14 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2D6A4F),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               child: _isPosting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('投稿する', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : const Text('投稿する',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -758,6 +999,7 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
     );
   }
 }
+
 class _VolunteerPostSheet extends StatefulWidget {
   final String orgId;
   final String orgName;
@@ -782,7 +1024,6 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
   final _scheduleCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
   String? _selectedArea;
-
 
   Future<void> _pickImage() async {
     setState(() => _isUploading = true);
@@ -840,14 +1081,16 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
                   borderRadius: BorderRadius.circular(16)),
               child: _isUploading
                   ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+                  child:
+                  CircularProgressIndicator(color: Color(0xFFE8845A)))
                   : _imageUrl != null
                   ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Image.network(_imageUrl!,
                       width: double.infinity, fit: BoxFit.cover))
                   : const Center(
-                  child: Text('📸 写真を選ぶ（任意）', style: TextStyle(color: Colors.grey))),
+                  child: Text('📸 写真を選ぶ（任意）',
+                      style: TextStyle(color: Colors.grey))),
             ),
           ),
           const SizedBox(height: 16),
@@ -857,7 +1100,8 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
             decoration: InputDecoration(
               labelText: 'タイトル *',
               hintText: '例：週末の保護犬お散歩ボランティア募集',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -867,11 +1111,13 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
             decoration: InputDecoration(
               labelText: '活動場所',
               hintText: '例：京都市内 保護施設',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
-          const Text('都道府県（どうぶつマップに表示されます）', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const Text('都道府県（どうぶつマップに表示されます）',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -881,25 +1127,29 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
               return GestureDetector(
                 onTap: () => setState(() => _selectedArea = pref),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                      color: sel ? const Color(0xFFE8845A) : Colors.grey[100],
+                      color:
+                      sel ? const Color(0xFFE8845A) : Colors.grey[100],
                       borderRadius: BorderRadius.circular(20)),
                   child: Text(pref,
-                      style: TextStyle(fontSize: 12, color: sel ? Colors.white : Colors.grey[700])),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: sel ? Colors.white : Colors.grey[700])),
                 ),
               );
             }).toList(),
           ),
           const SizedBox(height: 12),
-
           TextField(
             controller: _scheduleCtrl,
             maxLength: 50,
             decoration: InputDecoration(
               labelText: '活動日時・頻度',
               hintText: '例：毎週土曜 10:00〜12:00',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -910,7 +1160,8 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
             decoration: InputDecoration(
               labelText: '活動内容',
               hintText: '具体的な活動内容や、参加条件などを書いてください',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 20),
@@ -921,12 +1172,14 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE8845A),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               child: _isPosting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('投稿する', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : const Text('投稿する',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -934,6 +1187,7 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
     );
   }
 }
+
 class _EditOrgSheet extends StatefulWidget {
   final String orgId;
   final Map<String, dynamic> currentData;
@@ -961,9 +1215,12 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.currentData['name'] ?? '');
-    _activityCtrl = TextEditingController(text: widget.currentData['activityDescription'] ?? '');
-    _contactCtrl = TextEditingController(text: widget.currentData['contactInfo'] ?? '');
-    _websiteCtrl = TextEditingController(text: widget.currentData['websiteUrl'] ?? '');
+    _activityCtrl = TextEditingController(
+        text: widget.currentData['activityDescription'] ?? '');
+    _contactCtrl =
+        TextEditingController(text: widget.currentData['contactInfo'] ?? '');
+    _websiteCtrl =
+        TextEditingController(text: widget.currentData['websiteUrl'] ?? '');
     _selectedArea = widget.currentData['area'] ?? '';
   }
 
@@ -976,8 +1233,10 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
       'area': _selectedArea ?? '',
     };
 
-    final nameChanged = _nameCtrl.text.trim() != (widget.currentData['name'] ?? '');
-    final activityChanged = _activityCtrl.text.trim() != (widget.currentData['activityDescription'] ?? '');
+    final nameChanged =
+        _nameCtrl.text.trim() != (widget.currentData['name'] ?? '');
+    final activityChanged = _activityCtrl.text.trim() !=
+        (widget.currentData['activityDescription'] ?? '');
 
     if (nameChanged) {
       updates['nameUpdatePending'] = _nameCtrl.text.trim();
@@ -1008,7 +1267,8 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                color: Colors.orange[50], borderRadius: BorderRadius.circular(10)),
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(10)),
             child: const Text(
                 '団体名・活動内容は、変更後すぐには反映されません。運営が確認してから反映されます。連絡先・サイト・都道府県は、すぐに反映されます。',
                 style: TextStyle(fontSize: 11, color: Colors.orange)),
@@ -1018,7 +1278,8 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
             controller: _nameCtrl,
             decoration: InputDecoration(
               labelText: '団体名 または お名前',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -1027,7 +1288,8 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
             maxLines: 4,
             decoration: InputDecoration(
               labelText: '活動内容・実績',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -1035,7 +1297,8 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
             controller: _contactCtrl,
             decoration: InputDecoration(
               labelText: '連絡先（電話番号など）',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 12),
@@ -1043,11 +1306,13 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
             controller: _websiteCtrl,
             decoration: InputDecoration(
               labelText: '公式サイト・SNS',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('都道府県', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const Text('都道府県',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -1057,12 +1322,15 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
               return GestureDetector(
                 onTap: () => setState(() => _selectedArea = pref),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                       color: sel ? const Color(0xFF2D6A4F) : Colors.grey[100],
                       borderRadius: BorderRadius.circular(20)),
                   child: Text(pref,
-                      style: TextStyle(fontSize: 12, color: sel ? Colors.white : Colors.grey[700])),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: sel ? Colors.white : Colors.grey[700])),
                 ),
               );
             }).toList(),
@@ -1075,12 +1343,14 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE8845A),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               child: _isSaving
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('保存する', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : const Text('保存する',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
