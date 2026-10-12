@@ -5,6 +5,8 @@ import 'user_profile_page.dart';
 import 'event_page.dart';
 import 'root_page.dart';
 import 'chat_page.dart';
+import 'pet_brag_page.dart' show showPostDetail;
+import 'question_board_page.dart' show showQuestionDetail;
 
 /// ベルのボタン。未読の通知の数を、赤いバッジで出す。
 /// ホーム画面や団体マイページの、ベルのボタンと置き換えて使う。
@@ -290,6 +292,19 @@ class _NotificationPageState extends State<NotificationPage> {
                   MaterialPageRoute(builder: (_) => const RootPage()),
                       (route) => false,
                 );
+                return;
+              }
+
+              // 投稿へのリアクション・コメントの通知 → その投稿を開く
+              final postId = notif['postId'] as String?;
+              if (postId != null && mounted) {
+                showPostDetail(context, postId);
+                return;
+              }
+              // 質問への回答の通知 → その質問を開く
+              final questionId = notif['questionId'] as String?;
+              if (questionId != null && mounted) {
+                showQuestionDetail(context, questionId);
                 return;
               }
 

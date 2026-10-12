@@ -466,6 +466,7 @@ Future<void> vote(BuildContext context, String postId, String voteType) async {
         .collection('items')
         .add({
       'type': 'like',
+      'postId': postId,
       'senderUid': FirebaseAuth.instance.currentUser?.uid,
       'emoji': emojiMap[voteType] ?? '🔔',
       'title': '$petNameの投稿にリアクションがつきました',
@@ -1024,6 +1025,7 @@ class _CommentInputBarState extends State<_CommentInputBar> {
           .collection('items')
           .add({
         'type': 'chat',
+        'postId': widget.postId,
         'senderUid': FirebaseAuth.instance.currentUser?.uid,
         'emoji': '💬',
         'title': '${widget.petName}の投稿にコメントがつきました',

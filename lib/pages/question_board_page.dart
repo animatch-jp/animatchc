@@ -673,6 +673,7 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
           .collection('items')
           .add({
         'type': 'chat',
+        'questionId': widget.questionId,
         'senderUid': myUid,
         'emoji': '💬',
         'title': '質問に回答がつきました',

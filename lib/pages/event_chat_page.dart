@@ -37,7 +37,10 @@ class _EventChatPageState extends State<EventChatPage> {
   @override
   void initState() {
     super.initState();
-    _messageStream = _messagesRef.orderBy('createdAt').snapshots();
+    // 新しい順に読み、リストを逆向きに表示する。
+    // こうすると、開いたときに一番新しいメッセージが下に来る。
+    _messageStream =
+        _messagesRef.orderBy('createdAt', descending: true).snapshots();
     _loadMyInfo();
     _watchLatestMessage();
   }
@@ -145,8 +148,9 @@ class _EventChatPageState extends State<EventChatPage> {
     // 通知は「1イベントにつき1件」にまとめる。
     // メッセージのたびに増やすと、ベルのバッジが数えきれなくなるため、
     // 同じ通知を上書きして、未読に戻す。
+    // グループチャットのメッセージは「コメント・メッセージ」の設定に従う。
     for (final uid in notifyUids) {
-      if (!await shouldSendNotification(uid, 'イベント関連')) continue;
+      if (!await shouldSendNotification(uid, 'コメント・メッセージ')) continue;
       await FirebaseFirestore.instance
           .collection('notifications')
           .doc(uid)
@@ -164,10 +168,11 @@ class _EventChatPageState extends State<EventChatPage> {
       });
     }
 
+    // 送ったら、一番下（逆向きのリストでは、位置0）に戻る
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
@@ -243,6 +248,7 @@ class _EventChatPageState extends State<EventChatPage> {
 
                 return ListView.builder(
                   controller: _scrollCtrl,
+                  reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
                   itemBuilder: (_, i) {
