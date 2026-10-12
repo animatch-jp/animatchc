@@ -385,7 +385,9 @@ class _EventPageState extends State<EventPage> {
           children: [
             Text('✅ ドタキャンすると他の参加者に迷惑がかかります'),
             SizedBox(height: 8),
-            Text('✅ 2回キャンセルで24時間使用停止'),
+            Text('✅ 2回キャンセルすると、24時間イベントに参加できません'),
+            SizedBox(height: 8),
+            Text('✅ 3回キャンセルすると、イベントに参加できなくなります'),
             SizedBox(height: 8),
             Text('✅ キャンセルが多いとプロフィールに⚠️マークが表示されます'),
             SizedBox(height: 8),
@@ -493,13 +495,28 @@ class _EventPageState extends State<EventPage> {
         _showSnack('キャンセルが多いためイベントに参加できません。運営にお問い合わせください。');
         return;
       }
-      if (cancelCount == 2) {
+      // 2回キャンセルしたあとの、24時間の停止
+      final suspendedUntil = userDoc.data()?['eventSuspendedUntil'];
+      if (suspendedUntil is Timestamp &&
+          suspendedUntil.toDate().isAfter(DateTime.now())) {
+        final until = suspendedUntil.toDate();
+        final mm = until.minute.toString().padLeft(2, '0');
+        _showSnack(
+            'キャンセルが続いたため、${until.month}月${until.day}日 ${until.hour}:${mm}までイベントに参加できません');
+        return;
+      }
+      // 「あと1回で…」の注意
+      final String? warning = cancelCount == 1
+          ? 'あと1回キャンセルすると、24時間イベントに参加できなくなります。\n本当に参加しますか？'
+          : cancelCount == 2
+          ? 'あと1回キャンセルすると、イベントに参加できなくなります。\n本当に参加しますか？'
+          : null;
+      if (warning != null) {
         final confirm = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('⚠️ 注意'),
-            content: const Text(
-                'あと1回キャンセルすると24時間イベント機能が使えなくなります。\n本当に参加しますか？'),
+            content: Text(warning),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
@@ -629,10 +646,14 @@ class _EventPageState extends State<EventPage> {
         });
       }
 
-      await db
-          .collection('users')
-          .doc(myUid)
-          .update({'cancelCount': FieldValue.increment(1)});
+      // 2回目のキャンセルで、24時間イベントに参加できなくする
+      final newCancelCount = (myDoc.data()?['cancelCount'] as int? ?? 0) + 1;
+      await db.collection('users').doc(myUid).update({
+        'cancelCount': FieldValue.increment(1),
+        if (newCancelCount == 2)
+          'eventSuspendedUntil': Timestamp.fromDate(
+              DateTime.now().add(const Duration(hours: 24))),
+      });
 
       if (reason != null) {
         await eventRef.collection('cancellations').add({
@@ -652,7 +673,15 @@ class _EventPageState extends State<EventPage> {
           }
         });
       }
-      _showSnack('参加をキャンセルしました', color: Colors.grey);
+      if (newCancelCount == 2) {
+        _showSnack('参加をキャンセルしました。24時間、イベントに参加できません',
+            color: Colors.grey);
+      } else if (newCancelCount >= 3) {
+        _showSnack('参加をキャンセルしました。今後はイベントに参加できません。運営にお問い合わせください',
+            color: Colors.grey);
+      } else {
+        _showSnack('参加をキャンセルしました', color: Colors.grey);
+      }
     } catch (e) {
       _showSnack('エラーが発生しました');
     }
@@ -837,6 +866,33 @@ class _EventPageState extends State<EventPage> {
     }
   }
 
+  // 削除する前に、何が起きるかを伝えて、確認する
+  Future<void> _confirmDeleteEvent(Map<String, dynamic> event) async {
+    final title = event['title'] as String? ?? '';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('イベントを削除しますか？'),
+        content: Text(
+            '「$title」を削除します。\n参加者には、削除されたことが通知されます。\nこの操作は取り消せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('戻る', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('削除する'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) _deleteEvent(event);
+  }
+
   void _showOrganizerMenu(Map<String, dynamic> event) {
     showDialog(
       context: context,
@@ -845,7 +901,7 @@ class _EventPageState extends State<EventPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('キャンセル', style: TextStyle(color: Colors.grey)),
+            child: const Text('閉じる', style: TextStyle(color: Colors.grey)),
           ),
           TextButton(
             onPressed: () {
@@ -857,7 +913,7 @@ class _EventPageState extends State<EventPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              _deleteEvent(event);
+              _confirmDeleteEvent(event);
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red, foregroundColor: Colors.white),
@@ -887,9 +943,11 @@ class _EventPageState extends State<EventPage> {
         return bTime.compareTo(aTime);
       });
     }
-    // 終了したもの（主催者にだけ見える）は一番下に並べる
+    // 参加中のイベントを一番上に、終了したもの（主催者にだけ見える）は一番下に並べる
+    final active = list.where((e) => !_isExpired(e)).toList();
     return [
-      ...list.where((e) => !_isExpired(e)),
+      ...active.where((e) => _joinedEventIds.contains(e['id'])),
+      ...active.where((e) => !_joinedEventIds.contains(e['id'])),
       ...list.where((e) => _isExpired(e)),
     ];
   }
@@ -1573,6 +1631,25 @@ class _EventPageState extends State<EventPage> {
                           style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               side: const BorderSide(color: _orange),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14))),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            _confirmDeleteEvent(event);
+                          },
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              color: Colors.red),
+                          label: const Text('イベントを削除する（参加者に通知されます）',
+                              style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Colors.red),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14))),
                         ),
