@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'animal_map_page.dart';
 import '../services/unread_service.dart';
+import '../services/age_utils.dart';
 
 class RootPage extends StatefulWidget {
   final int initialIndex;
@@ -30,12 +31,35 @@ class _RootPageState extends State<RootPage> {
     _visitedIndices.add(_idx);
     UnreadService.instance.init(); // 下タブ「チャット」のバッジ用に、未読を数え始める
     _initFCM();
+    _syncAge(); // 誕生日が来ていたら、年齢を更新する
   }
 
   @override
   void dispose() {
     _homeScrollController.dispose();
     super.dispose();
+  }
+
+  // 生年月日から年齢を計算し直して、変わっていたら age を更新する。
+  // （イベントの18歳判定は users の age を見ているため）
+  Future<void> _syncAge() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final userRef =
+      FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final birthDoc = await userRef.collection('private').doc('birth').get();
+      final birth = AgeUtils.parse(birthDoc.data()?['birthDate'] as String?);
+      if (birth == null) return; // 生年月日が未登録の人は、そのまま
+      final age = AgeUtils.calculate(birth);
+      final userDoc = await userRef.get();
+      if (!userDoc.exists) return;
+      if (userDoc.data()?['age'] != age) {
+        await userRef.update({'age': age});
+      }
+    } catch (e) {
+      debugPrint('年齢の更新エラー: $e');
+    }
   }
 
   Future<void> _initFCM() async {
