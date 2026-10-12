@@ -1,6 +1,10 @@
 import 'profile_setup_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'terms_page.dart';
+import 'privacy_page.dart';
+import '../services/legal_info.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -62,10 +66,11 @@ class _RegisterPageState extends State<RegisterPage> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text.trim(),
       );
+      await _recordConsent(cred.user?.uid);
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -87,6 +92,41 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // 同意した版と日時を、本人しか読めない場所に記録する（失敗しても、登録は続ける）
+  Future<void> _recordConsent(String? uid) async {
+    if (uid == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('private')
+          .doc('consent')
+          .set({
+        'termsVersion': LegalInfo.version,
+        'agreedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('同意の記録エラー: $e');
+    }
+  }
+
+  Widget _legalLink(String label, Widget page) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+          context, MaterialPageRoute(builder: (_) => page)),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 13,
+          color: Color(0xFFE8845A),
+          fontWeight: FontWeight.bold,
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -206,13 +246,30 @@ class _RegisterPageState extends State<RegisterPage> {
                         onChanged: (val) => setState(() => _isAgeConfirmed = val ?? false),
                         activeColor: const Color(0xFFE8845A),
                       ),
-                      const Expanded(
-                        child: Text(
-                          '利用規約とプライバシーポリシーに同意します（13歳未満の方はご利用いただけません）',
-                          style: TextStyle(fontSize: 13, color: Color(0xFF3D2B1F)),
+                      Expanded(
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            _legalLink('利用規約', const TermsPage()),
+                            const Text('と',
+                                style: TextStyle(
+                                    fontSize: 13, color: Color(0xFF3D2B1F))),
+                            _legalLink(
+                                'プライバシーポリシー', const PrivacyPage()),
+                            const Text('に同意します',
+                                style: TextStyle(
+                                    fontSize: 13, color: Color(0xFF3D2B1F))),
+                          ],
                         ),
                       ),
                     ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12, right: 4),
+                    child: Text(
+                      '13歳未満の方はご利用いただけません。18歳未満の方は、保護者の方の同意を得てご利用ください。',
+                      style: TextStyle(fontSize: 11, color: Colors.grey, height: 1.5),
+                    ),
                   ),
 
                   const SizedBox(height: 16),
