@@ -308,12 +308,7 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
         elevation: 0,
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const NotificationPage())),
-            icon: const Icon(Icons.notifications_outlined,
-                color: Color(0xFFE8845A)),
-          ),
+          const NotificationBellButton(),
           _chatIconWithBadge(),
           IconButton(
             onPressed: () async {
