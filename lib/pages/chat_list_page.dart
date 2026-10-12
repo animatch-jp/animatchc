@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/unread_service.dart';
 import 'event_chat_page.dart';
 import 'chat_page.dart';
 
@@ -18,14 +19,12 @@ class _ChatListPageState extends State<ChatListPage>
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSub;
 
   List<Map<String, dynamic>> _orgChats = [];
-  List<Map<String, dynamic>> _joinedEvents = [];
 
   // null = 団体ではない相手
   final Map<String, Map<String, dynamic>?> _orgCache = {};
   final Map<String, Map<String, dynamic>> _lastMsgCache = {};
 
   bool _orgLoaded = false;
-  bool _eventsLoaded = false;
   bool _hasError = false;
   int _gen = 0;
 
@@ -36,7 +35,9 @@ class _ChatListPageState extends State<ChatListPage>
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _listenOrgChats();
-    _loadEvents();
+    // グループ（イベント）の一覧と未読は、共通部品が数えている
+    UnreadService.instance.init();
+    UnreadService.instance.refreshMembership();
   }
 
   @override
@@ -165,118 +166,6 @@ class _ChatListPageState extends State<ChatListPage>
     });
   }
 
-  // ---------- 参加中のイベント（グループ） ----------
-
-  Future<void> _loadEvents() async {
-    try {
-      final myUid = _myUid;
-      if (myUid == null) {
-        if (mounted) setState(() => _eventsLoaded = true);
-        return;
-      }
-
-      final eventsSnapshot = await FirebaseFirestore.instance
-          .collection('events')
-          .orderBy('createdAt', descending: true)
-          .get();
-
-      final joinedEvents = <Map<String, dynamic>>[];
-      for (final doc in eventsSnapshot.docs) {
-        final data = doc.data();
-        bool shouldAdd = false;
-
-        if (data['organizerUid'] == myUid) {
-          shouldAdd = true;
-        } else {
-          final participantDoc = await FirebaseFirestore.instance
-              .collection('events')
-              .doc(doc.id)
-              .collection('participants')
-              .doc(myUid)
-              .get();
-          if (participantDoc.exists) shouldAdd = true;
-        }
-
-        if (!shouldAdd) continue;
-
-        String lastMessage = '';
-        String lastTime = '';
-        DateTime? lastTimestamp;
-        final lastMsgDoc = await FirebaseFirestore.instance
-            .collection('events')
-            .doc(doc.id)
-            .collection('messages')
-            .orderBy('createdAt', descending: true)
-            .limit(1)
-            .get();
-        if (lastMsgDoc.docs.isNotEmpty) {
-          final msgData = lastMsgDoc.docs.first.data();
-          lastMessage = msgData['text'] as String? ?? '';
-          final time = msgData['createdAt'] != null
-              ? (msgData['createdAt'] as Timestamp).toDate()
-              : DateTime.now();
-          lastTime = '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
-          lastTimestamp = time;
-        }
-
-        int unreadCount = 0;
-        final lastSeenDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(myUid)
-            .collection('groupChatLastSeen')
-            .doc(doc.id)
-            .get();
-
-        if (lastSeenDoc.exists) {
-          final lastSeen = lastSeenDoc.data()?['lastSeen'] as Timestamp?;
-          if (lastSeen != null) {
-            final unreadMsgs = await FirebaseFirestore.instance
-                .collection('events')
-                .doc(doc.id)
-                .collection('messages')
-                .where('createdAt', isGreaterThan: lastSeen)
-                .get();
-            unreadCount = unreadMsgs.docs.length;
-          }
-        } else {
-          final allMsgs = await FirebaseFirestore.instance
-              .collection('events')
-              .doc(doc.id)
-              .collection('messages')
-              .get();
-          unreadCount = allMsgs.docs.length;
-        }
-
-        joinedEvents.add({
-          'id': doc.id,
-          'lastMessage': lastMessage,
-          'lastTime': lastTime,
-          'lastTimestamp': lastTimestamp,
-          'unreadCount': unreadCount,
-          ...data
-        });
-      }
-
-      joinedEvents.sort((a, b) {
-        final at = a['lastTimestamp'] as DateTime?;
-        final bt = b['lastTimestamp'] as DateTime?;
-        if (at == null && bt == null) return 0;
-        if (at == null) return 1;
-        if (bt == null) return -1;
-        return bt.compareTo(at);
-      });
-
-      if (mounted) {
-        setState(() {
-          _joinedEvents = joinedEvents;
-          _eventsLoaded = true;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _eventsLoaded = true);
-    }
-  }
-
   // ---------- 表示 ----------
 
   String _timeLabel(DateTime? t) {
@@ -300,12 +189,18 @@ class _ChatListPageState extends State<ChatListPage>
         borderRadius: BorderRadius.circular(size / 2),
         border: Border.all(color: Colors.white, width: 2),
       ),
-      child: Center(
-        child: Text(n > 99 ? '99+' : '$n',
-            style: const TextStyle(
-                fontSize: 10,
-                color: Colors.white,
-                fontWeight: FontWeight.bold)),
+      // Center を使うと、ListTile の右側に置いたときに幅いっぱいに広がって
+      // エラーになるため、Row で中央に寄せる
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(n > 99 ? '99+' : '$n',
+              style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }
@@ -356,7 +251,8 @@ class _ChatListPageState extends State<ChatListPage>
         clipBehavior: Clip.none,
         children: [
           Positioned(left: 0, bottom: 0, child: image),
-          if (unread > 0) Positioned(right: -2, top: -2, child: _countBadge(unread)),
+          if (unread > 0)
+            Positioned(right: -2, top: -2, child: _countBadge(unread)),
         ],
       ),
     );
@@ -496,8 +392,8 @@ class _ChatListPageState extends State<ChatListPage>
     );
   }
 
-  Widget _buildEventTab() {
-    if (_joinedEvents.isEmpty) {
+  Widget _buildEventTab(List<GroupChatSummary> groups) {
+    if (groups.isEmpty) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -514,9 +410,9 @@ class _ChatListPageState extends State<ChatListPage>
       );
     }
     return ListView.builder(
-      itemCount: _joinedEvents.length,
+      itemCount: groups.length,
       itemBuilder: (_, i) {
-        final event = _joinedEvents[i];
+        final g = groups[i];
         return ListTile(
           leading: Container(
             width: 52,
@@ -525,46 +421,42 @@ class _ChatListPageState extends State<ChatListPage>
                 color: const Color(0xFF2D6A4F).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12)),
             child: Center(
-              child: Text(event['emoji'] as String? ?? '🐾',
-                  style: const TextStyle(fontSize: 28)),
+              child: Text(g.emoji, style: const TextStyle(fontSize: 28)),
             ),
           ),
-          title: Text(event['title'] as String? ?? '',
-              style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(event['lastMessage'] as String? ?? '',
+          title: Text(g.title,
+              style: TextStyle(
+                  fontWeight:
+                  g.unread > 0 ? FontWeight.w900 : FontWeight.bold)),
+          subtitle: Text(g.lastMessage,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              style: TextStyle(
+                  color: g.unread > 0
+                      ? const Color(0xFF3D2B1F)
+                      : Colors.grey[600],
+                  fontWeight:
+                  g.unread > 0 ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 13)),
           trailing: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(event['lastTime'] as String? ?? '',
+              Text(_timeLabel(g.lastAt),
                   style: TextStyle(fontSize: 11, color: Colors.grey[400])),
               const SizedBox(height: 4),
-              if ((event['unreadCount'] as int? ?? 0) > 0)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                      color: Color(0xFFE8845A), shape: BoxShape.circle),
-                  child: Text('${event['unreadCount']}',
-                      style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold)),
-                )
+              if (g.unread > 0)
+                _countBadge(g.unread)
               else
                 const Icon(Icons.chat_bubble_outline,
                     color: Color(0xFF2D6A4F), size: 18),
             ],
           ),
-          onTap: () async {
-            await Navigator.push(
+          onTap: () {
+            Navigator.push(
                 context,
                 MaterialPageRoute(
                     builder: (_) => EventChatPage(
-                        eventId: event['id'],
-                        eventTitle: event['title'] as String? ?? '')));
-            _loadEvents();
+                        eventId: g.eventId, eventTitle: g.title)));
           },
         );
       },
@@ -573,47 +465,53 @@ class _ChatListPageState extends State<ChatListPage>
 
   @override
   Widget build(BuildContext context) {
-    if (!_orgLoaded || !_eventsLoaded) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFFFF5F3),
-        body: Center(
-            child: CircularProgressIndicator(color: Color(0xFFE8845A))),
-      );
-    }
+    final svc = UnreadService.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([svc.groups, svc.groupsLoaded]),
+      builder: (context, _) {
+        if (!_orgLoaded || !svc.groupsLoaded.value) {
+          return const Scaffold(
+            backgroundColor: Color(0xFFFFF5F3),
+            body: Center(
+                child: CircularProgressIndicator(color: Color(0xFFE8845A))),
+          );
+        }
 
-    final orgUnread =
-    _orgChats.fold<int>(0, (sum, c) => sum + (c['unread'] as int));
-    final eventUnread = _joinedEvents.fold<int>(
-        0, (sum, e) => sum + (e['unreadCount'] as int? ?? 0));
+        final groups = svc.groups.value;
+        final orgUnread =
+        _orgChats.fold<int>(0, (sum, c) => sum + (c['unread'] as int));
+        final eventUnread = groups.fold<int>(0, (sum, g) => sum + g.unread);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF5F3),
-      appBar: AppBar(
-        title: const Text('チャット 💬',
-            style: TextStyle(fontWeight: FontWeight.w900)),
-        backgroundColor: const Color(0xFFFFF5F3),
-        foregroundColor: Colors.black,
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabCtrl,
-          labelColor: const Color(0xFFE8845A),
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: const Color(0xFFE8845A),
-          tabs: [
-            Tab(child: _tabLabel('団体（${_orgChats.length}）', orgUnread)),
-            Tab(
-                child: _tabLabel(
-                    'グループ（${_joinedEvents.length}）', eventUnread)),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
-        children: [
-          _buildOrgTab(),
-          _buildEventTab(),
-        ],
-      ),
+        return Scaffold(
+          backgroundColor: const Color(0xFFFFF5F3),
+          appBar: AppBar(
+            title: const Text('チャット 💬',
+                style: TextStyle(fontWeight: FontWeight.w900)),
+            backgroundColor: const Color(0xFFFFF5F3),
+            foregroundColor: Colors.black,
+            elevation: 0,
+            bottom: TabBar(
+              controller: _tabCtrl,
+              labelColor: const Color(0xFFE8845A),
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: const Color(0xFFE8845A),
+              tabs: [
+                Tab(child: _tabLabel('団体（${_orgChats.length}）', orgUnread)),
+                Tab(
+                    child: _tabLabel(
+                        'グループ（${groups.length}）', eventUnread)),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            controller: _tabCtrl,
+            children: [
+              _buildOrgTab(),
+              _buildEventTab(groups),
+            ],
+          ),
+        );
+      },
     );
   }
 }

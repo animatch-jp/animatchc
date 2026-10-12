@@ -8,8 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'animal_map_page.dart';
-
-
+import '../services/unread_service.dart';
 
 class RootPage extends StatefulWidget {
   final int initialIndex;
@@ -29,6 +28,7 @@ class _RootPageState extends State<RootPage> {
     super.initState();
     _idx = widget.initialIndex;
     _visitedIndices.add(_idx);
+    UnreadService.instance.init(); // 下タブ「チャット」のバッジ用に、未読を数え始める
     _initFCM();
   }
 
@@ -37,7 +37,6 @@ class _RootPageState extends State<RootPage> {
     _homeScrollController.dispose();
     super.dispose();
   }
-
 
   Future<void> _initFCM() async {
     if (kIsWeb) return;
@@ -59,7 +58,6 @@ class _RootPageState extends State<RootPage> {
     }
   }
 
-
   List<Widget> get _pages => [
     HomePage(scrollController: _homeScrollController),
     const AnimalMapPage(),
@@ -69,6 +67,8 @@ class _RootPageState extends State<RootPage> {
   ];
 
   void _selectTab(int index) {
+    // チャットタブを開くときに、参加中のイベントを最新にする
+    if (index == 3) UnreadService.instance.refreshMembership();
     setState(() {
       _idx = index;
       _visitedIndices.add(index);
@@ -101,8 +101,11 @@ class _RootPageState extends State<RootPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _NavItem(icon: Icons.home_rounded, label: 'ホーム',
-                    selected: _idx == 0, onTap: () {
+                _NavItem(
+                    icon: Icons.home_rounded,
+                    label: 'ホーム',
+                    selected: _idx == 0,
+                    onTap: () {
                       if (_idx == 0) {
                         _homeScrollController.animateTo(
                           0,
@@ -113,15 +116,30 @@ class _RootPageState extends State<RootPage> {
                         _selectTab(0);
                       }
                     }),
-                _NavItem(icon: Icons.pets_rounded, label: 'どうぶつマップ',
-                    selected: _idx == 1, onTap: () => _selectTab(1)),
-                _NavItem(icon: Icons.event_rounded, label: 'イベント',
-                    selected: _idx == 2, onTap: () => _selectTab(2)),
-                _NavItem(icon: Icons.chat_bubble_rounded, label: 'チャット',
-                    selected: _idx == 3, onTap: () => _selectTab(3)),
-                _NavItem(icon: Icons.person_rounded, label: 'マイページ',
-                    selected: _idx == 4, onTap: () => _selectTab(4)),
-
+                _NavItem(
+                    icon: Icons.pets_rounded,
+                    label: 'どうぶつマップ',
+                    selected: _idx == 1,
+                    onTap: () => _selectTab(1)),
+                _NavItem(
+                    icon: Icons.event_rounded,
+                    label: 'イベント',
+                    selected: _idx == 2,
+                    onTap: () => _selectTab(2)),
+                ValueListenableBuilder<int>(
+                  valueListenable: UnreadService.instance.totalUnread,
+                  builder: (_, unread, __) => _NavItem(
+                      icon: Icons.chat_bubble_rounded,
+                      label: 'チャット',
+                      badge: unread,
+                      selected: _idx == 3,
+                      onTap: () => _selectTab(3)),
+                ),
+                _NavItem(
+                    icon: Icons.person_rounded,
+                    label: 'マイページ',
+                    selected: _idx == 4,
+                    onTap: () => _selectTab(4)),
               ],
             ),
           ),
@@ -131,18 +149,19 @@ class _RootPageState extends State<RootPage> {
   }
 }
 
-
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final int badge;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badge = 0,
   });
 
   @override
@@ -161,11 +180,38 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                color: selected
-                    ? const Color(0xFFE8845A)
-                    : const Color(0xFFBDB5B0),
-                size: 24),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon,
+                    color: selected
+                        ? const Color(0xFFE8845A)
+                        : const Color(0xFFBDB5B0),
+                    size: 24),
+                if (badge > 0)
+                  Positioned(
+                    right: -9,
+                    top: -5,
+                    child: Container(
+                      constraints:
+                      const BoxConstraints(minWidth: 16, minHeight: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      child: Center(
+                        child: Text(badge > 99 ? '99+' : '$badge',
+                            style: const TextStyle(
+                                fontSize: 9,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 2),
             Text(label,
                 style: TextStyle(
@@ -173,8 +219,8 @@ class _NavItem extends StatelessWidget {
                     color: selected
                         ? const Color(0xFFE8845A)
                         : const Color(0xFFBDB5B0),
-                    fontWeight: selected
-                        ? FontWeight.bold : FontWeight.normal)),
+                    fontWeight:
+                    selected ? FontWeight.bold : FontWeight.normal)),
           ],
         ),
       ),
