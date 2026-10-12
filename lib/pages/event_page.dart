@@ -1330,6 +1330,7 @@ class _EventPageState extends State<EventPage> {
             .collection('items')
             .add({
           'type': 'eventRemoved',
+          'senderUid': FirebaseAuth.instance.currentUser?.uid,
           'emoji': '🚫',
           'title': 'イベントから追放されました',
           'desc': '${event['title']}から追放されました',

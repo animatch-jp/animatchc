@@ -80,7 +80,6 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
             () => _deleteAll(userRef.collection('searchHistory')));
     await _safe('groupChatLastSeen',
             () => _deleteAll(userRef.collection('groupChatLastSeen')));
-    await _safe('private', () => _deleteAll(userRef.collection('private')));
 
     await _safe('likes',
             () => _deleteAll(_db.collection('likes').doc(uid).collection('liked')));
@@ -133,8 +132,14 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
             () => _db.collection('organizations').doc(uid).delete());
     await _safe('hospitals', () => _db.collection('hospitals').doc(uid).delete());
 
-    // 最後に、プロフィール本体
-    await userRef.delete();
+    // 最後に、プロフィール本体と非公開の情報（生年月日など）を、いっしょに消す
+    final privateDocs = await userRef.collection('private').get();
+    final last = _db.batch();
+    for (final d in privateDocs.docs) {
+      last.delete(d.reference);
+    }
+    last.delete(userRef);
+    await last.commit();
   }
 
   Future<String?> _askPassword() async {

@@ -295,6 +295,7 @@ class _VolunteerInterestSectionState extends State<_VolunteerInterestSection> {
             .collection('items')
             .add({
           'type': 'volunteerInterest',
+          'senderUid': myUid,
           'emoji': '🙋',
           'title': 'ボランティアに興味を持った人がいます',
           'desc': '$myName さんが、ボランティア募集に興味ありを押しました',

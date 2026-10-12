@@ -30,75 +30,75 @@ class _QuestionBoardPageState extends State<QuestionBoardPage> {
   final Set<String> _selectedCategories = {};
   bool _onlyUnsolved = false;
 
-void _showPostSheet() {
-showModalBottomSheet(
-context: context,
-isScrollControlled: true,
-shape: const RoundedRectangleBorder(
-borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-builder: (_) => Padding(
-padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-child: const _PostQuestionSheet(),
-),
-);
-}
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: const Color(0xFFFFF8F5),
-    appBar: AppBar(
-      title: const Text('質問掲示板 💬',
-          style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+  void _showPostSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: const _PostQuestionSheet(),
+      ),
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
       backgroundColor: const Color(0xFFFFF8F5),
-      elevation: 0,
-    ),
-    body: Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Text('ちょっとした困りごと、みんなに聞いてみよう',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+      appBar: AppBar(
+        title: const Text('質問掲示板 💬',
+            style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+        backgroundColor: const Color(0xFFFFF8F5),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('ちょっとした困りごと、みんなに聞いてみよう',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _categoryChip('すべて', null),
+                  ...questionCategories.map((c) => _categoryChip('${c['emoji']} ${c['label']}', c['key'])),
+                ],
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                _categoryChip('すべて', null),
-                ...questionCategories.map((c) => _categoryChip('${c['emoji']} ${c['label']}', c['key'])),
+                Checkbox(
+                  value: _onlyUnsolved,
+                  onChanged: (v) => setState(() => _onlyUnsolved = v ?? false),
+                  activeColor: const Color(0xFFE8845A),
+                ),
+                const Text('未解決の質問のみ表示', style: TextStyle(fontSize: 12)),
               ],
             ),
           ),
-        ),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Checkbox(
-                value: _onlyUnsolved,
-                onChanged: (v) => setState(() => _onlyUnsolved = v ?? false),
-                activeColor: const Color(0xFFE8845A),
-              ),
-              const Text('未解決の質問のみ表示', style: TextStyle(fontSize: 12)),
-            ],
+          Expanded(
+            child: _QuestionList(categories: _selectedCategories, onlyUnsolved: _onlyUnsolved),
           ),
-        ),
-        Expanded(
-          child: _QuestionList(categories: _selectedCategories, onlyUnsolved: _onlyUnsolved),
-        ),
 
-      ],
-    ),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _showPostSheet,
-      backgroundColor: const Color(0xFFE8845A),
-      icon: const Icon(Icons.add, color: Colors.white),
-      label: const Text('質問する', style: TextStyle(color: Colors.white)),
-    ),
-  );
-}
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showPostSheet,
+        backgroundColor: const Color(0xFFE8845A),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('質問する', style: TextStyle(color: Colors.white)),
+      ),
+    );
+  }
 
   Widget _categoryChip(String label, String? key) {
     final sel = key == null ? _selectedCategories.isEmpty : _selectedCategories.contains(key);
@@ -271,140 +271,140 @@ class _PostQuestionSheet extends StatefulWidget {
 }
 
 class _PostQuestionSheetState extends State<_PostQuestionSheet> {
-final _titleCtrl = TextEditingController();
-final _bodyCtrl = TextEditingController();
-String? _selectedCategory;
-String? _imageUrl;
-bool _isUploading = false;
-bool _isPosting = false;
+  final _titleCtrl = TextEditingController();
+  final _bodyCtrl = TextEditingController();
+  String? _selectedCategory;
+  String? _imageUrl;
+  bool _isUploading = false;
+  bool _isPosting = false;
 
-Future<void> _pickImage() async {
-setState(() => _isUploading = true);
-final url = await CloudinaryService.pickAndUploadImage();
-setState(() {
-if (url != null) _imageUrl = url;
-_isUploading = false;
-});
-}
+  Future<void> _pickImage() async {
+    setState(() => _isUploading = true);
+    final url = await CloudinaryService.pickAndUploadImage();
+    setState(() {
+      if (url != null) _imageUrl = url;
+      _isUploading = false;
+    });
+  }
 
-Future<void> _submit() async {
-if (_titleCtrl.text.trim().isEmpty || _bodyCtrl.text.trim().isEmpty || _selectedCategory == null) {
-ScaffoldMessenger.of(context).showSnackBar(
-const SnackBar(content: Text('タイトル・内容・カテゴリを入力してください'), backgroundColor: Colors.red),
-);
-return;
-}
+  Future<void> _submit() async {
+    if (_titleCtrl.text.trim().isEmpty || _bodyCtrl.text.trim().isEmpty || _selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('タイトル・内容・カテゴリを入力してください'), backgroundColor: Colors.red),
+      );
+      return;
+    }
 
-final myUid = FirebaseAuth.instance.currentUser?.uid;
-if (myUid == null) return;
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (myUid == null) return;
 
-setState(() => _isPosting = true);
+    setState(() => _isPosting = true);
 
-final userDoc = await FirebaseFirestore.instance.collection('users').doc(myUid).get();
-final myName = userDoc.data()?['name'] as String? ?? '名無しさん';
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(myUid).get();
+    final myName = userDoc.data()?['name'] as String? ?? '名無しさん';
 
-await FirebaseFirestore.instance.collection('questions').add({
-'uid': myUid,
-'name': myName,
-'title': _titleCtrl.text.trim(),
-'body': _bodyCtrl.text.trim(),
-'category': _selectedCategory,
-'imageUrl': _imageUrl ?? '',
-'solved': false,
-'createdAt': FieldValue.serverTimestamp(),
-});
+    await FirebaseFirestore.instance.collection('questions').add({
+      'uid': myUid,
+      'name': myName,
+      'title': _titleCtrl.text.trim(),
+      'body': _bodyCtrl.text.trim(),
+      'category': _selectedCategory,
+      'imageUrl': _imageUrl ?? '',
+      'solved': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
-if (mounted) {
-Navigator.pop(context);
-}
-}
-@override
-Widget build(BuildContext context) {
-  return SingleChildScrollView(
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('質問する', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        const Text('カテゴリ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: questionCategories.map((c) {
-            final sel = _selectedCategory == c['key'];
-            return GestureDetector(
-              onTap: () => setState(() => _selectedCategory = c['key']),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                    color: sel ? const Color(0xFFE8845A) : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(20)),
-                child: Text('${c['emoji']} ${c['label']}',
-                    style: TextStyle(fontSize: 12, color: sel ? Colors.white : Colors.grey[700])),
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('質問する', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          const Text('カテゴリ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: questionCategories.map((c) {
+              final sel = _selectedCategory == c['key'];
+              return GestureDetector(
+                onTap: () => setState(() => _selectedCategory = c['key']),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                      color: sel ? const Color(0xFFE8845A) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Text('${c['emoji']} ${c['label']}',
+                      style: TextStyle(fontSize: 12, color: sel ? Colors.white : Colors.grey[700])),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _titleCtrl,
+            maxLength: 50,
+            decoration: InputDecoration(
+              labelText: 'タイトル（例：夜間、猫が急に元気がない）',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          TextField(
+            controller: _bodyCtrl,
+            maxLines: 5,
+            maxLength: 500,
+            decoration: InputDecoration(
+              labelText: '詳しい内容',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _isUploading ? null : _pickImage,
+            child: Container(
+              width: double.infinity,
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(14),
+                image: _imageUrl != null ? DecorationImage(image: NetworkImage(_imageUrl!), fit: BoxFit.cover) : null,
               ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _titleCtrl,
-          maxLength: 50,
-          decoration: InputDecoration(
-            labelText: 'タイトル（例：夜間、猫が急に元気がない）',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        TextField(
-          controller: _bodyCtrl,
-          maxLines: 5,
-          maxLength: 500,
-          decoration: InputDecoration(
-            labelText: '詳しい内容',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: _isUploading ? null : _pickImage,
-          child: Container(
-            width: double.infinity,
-            height: 140,
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(14),
-              image: _imageUrl != null ? DecorationImage(image: NetworkImage(_imageUrl!), fit: BoxFit.cover) : null,
+              child: _isUploading
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+                  : (_imageUrl == null
+                  ? const Center(child: Text('📷 写真を追加（任意）', style: TextStyle(color: Colors.grey)))
+                  : null),
             ),
-            child: _isUploading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8845A)))
-                : (_imageUrl == null
-                ? const Center(child: Text('📷 写真を追加（任意）', style: TextStyle(color: Colors.grey)))
-                : null),
           ),
-        ),
 
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _isPosting ? null : _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE8845A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isPosting ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE8845A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: _isPosting
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('質問を投稿する', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
-            child: _isPosting
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Text('質問を投稿する', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 }
 void showQuestionDetail(BuildContext context, String questionId) {
   showModalBottomSheet(
@@ -673,6 +673,7 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
           .collection('items')
           .add({
         'type': 'chat',
+        'senderUid': myUid,
         'emoji': '💬',
         'title': '質問に回答がつきました',
         'desc': '「${widget.questionTitle}」に $myName さんが回答しました',
