@@ -594,21 +594,23 @@ class _AnswerList extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: myUid == null ? null : () => _toggleHelpful(doc.id, helpfulBy, myUid),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isHelpful ? Icons.thumb_up_alt_rounded : Icons.thumb_up_alt_outlined,
-                          size: 14,
-                          color: isHelpful ? const Color(0xFFE8845A) : Colors.grey,
-                        ),
-                        const SizedBox(width: 4),
-                        Text('役に立った${helpfulBy.isNotEmpty ? ' (${helpfulBy.length})' : ''}',
-                            style: TextStyle(fontSize: 11, color: isHelpful ? const Color(0xFFE8845A) : Colors.grey)),
-                      ],
+                  if (!(isMine && helpfulBy.isEmpty))
+                    GestureDetector(
+                      // 自分の回答には「役に立った」を付けられない（他の人の票だけ数える）
+                      onTap: (myUid == null || isMine) ? null : () => _toggleHelpful(doc.id, helpfulBy, myUid),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isHelpful ? Icons.thumb_up_alt_rounded : Icons.thumb_up_alt_outlined,
+                            size: 14,
+                            color: isHelpful ? const Color(0xFFE8845A) : Colors.grey,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('役に立った${helpfulBy.isNotEmpty ? ' (${helpfulBy.length})' : ''}',
+                              style: TextStyle(fontSize: 11, color: isHelpful ? const Color(0xFFE8845A) : Colors.grey)),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             );

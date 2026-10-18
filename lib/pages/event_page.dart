@@ -943,11 +943,16 @@ class _EventPageState extends State<EventPage> {
         return bTime.compareTo(aTime);
       });
     }
-    // 参加中のイベントを一番上に、終了したもの（主催者にだけ見える）は一番下に並べる
+    // 自分が主催しているもの・参加中のものを一番上に、
+    // 終了したもの（主催者にだけ見える）は一番下に並べる
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    bool pinned(Map<String, dynamic> e) =>
+        _joinedEventIds.contains(e['id']) ||
+            (myUid != null && e['organizerUid'] == myUid);
     final active = list.where((e) => !_isExpired(e)).toList();
     return [
-      ...active.where((e) => _joinedEventIds.contains(e['id'])),
-      ...active.where((e) => !_joinedEventIds.contains(e['id'])),
+      ...active.where(pinned),
+      ...active.where((e) => !pinned(e)),
       ...list.where((e) => _isExpired(e)),
     ];
   }

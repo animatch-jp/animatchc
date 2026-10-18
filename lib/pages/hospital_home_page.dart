@@ -232,6 +232,16 @@ class _HospitalHomePageState extends State<HospitalHomePage> {
                       ],
                     ),
                   ],
+                  if ((_data?['access'] ?? '').toString().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.train_rounded, color: Colors.white70, size: 14),
+                        const SizedBox(width: 4),
+                        Expanded(child: Text(_data?['access'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.white70))),
+                      ],
+                    ),
+                  ],
                   if ((_data?['businessHours'] ?? '').toString().isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Row(
@@ -399,6 +409,7 @@ class _EditHospitalSheet extends StatefulWidget {
 class _EditHospitalSheetState extends State<_EditHospitalSheet> {
   late TextEditingController _nameCtrl;
   late TextEditingController _addressCtrl;
+  late TextEditingController _accessCtrl;
   late TextEditingController _hoursCtrl;
   late TextEditingController _contactCtrl;
   String? _selectedArea;
@@ -415,6 +426,7 @@ class _EditHospitalSheetState extends State<_EditHospitalSheet> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.currentData['name'] ?? '');
     _addressCtrl = TextEditingController(text: widget.currentData['address'] ?? '');
+    _accessCtrl = TextEditingController(text: widget.currentData['access'] ?? '');
     _hoursCtrl = TextEditingController(text: widget.currentData['businessHours'] ?? '');
     _contactCtrl = TextEditingController(text: widget.currentData['contactInfo'] ?? '');
     _selectedArea = widget.currentData['area'] ?? '';
@@ -430,6 +442,7 @@ class _EditHospitalSheetState extends State<_EditHospitalSheet> {
     try {
       final updates = <String, dynamic>{
         'address': _addressCtrl.text.trim(),
+        'access': _accessCtrl.text.trim(),
         'businessHours': _hoursCtrl.text.trim(),
         'contactInfo': _contactCtrl.text.trim(),
         'area': _selectedArea ?? '',
@@ -493,22 +506,36 @@ class _EditHospitalSheetState extends State<_EditHospitalSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _nameCtrl,
+            maxLength: 50,
             decoration: InputDecoration(labelText: '病院名', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _addressCtrl,
+            maxLength: 100,
             decoration: InputDecoration(labelText: '住所（番地まで）', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _accessCtrl,
+            maxLength: 100,
+            decoration: InputDecoration(
+              labelText: 'アクセス（最寄り駅・駐車場など）',
+              hintText: '例：○○駅から徒歩5分／駐車場あり（3台）',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _hoursCtrl,
             maxLines: 2,
+            maxLength: 150,
             decoration: InputDecoration(labelText: '診療時間・休診日', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _contactCtrl,
+            maxLength: 100,
             decoration: InputDecoration(labelText: '連絡先', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
           ),
           const SizedBox(height: 16),
