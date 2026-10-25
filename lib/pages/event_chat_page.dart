@@ -253,6 +253,7 @@ class _EventChatPageState extends State<EventChatPage> {
       ),
       body: Column(
         children: [
+          _EventInfoBar(eventId: widget.eventId),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _messageStream,
@@ -500,6 +501,73 @@ class _EventChatPageState extends State<EventChatPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// チャットの上に出す、イベントの情報（日にち・場所・参加人数）と、話し方のお願い
+class _EventInfoBar extends StatelessWidget {
+  final String eventId;
+  const _EventInfoBar({required this.eventId});
+
+  @override
+  Widget build(BuildContext context) {
+    final eventRef =
+        FirebaseFirestore.instance.collection('events').doc(eventId);
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: eventRef.snapshots(),
+      builder: (context, snap) {
+        final e = snap.data?.data() ?? const <String, dynamic>{};
+        final date = e['date'] as String? ?? '';
+        final location = e['location'] as String? ?? '';
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFF3E1D7)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                children: [
+                  if (date.isNotEmpty) _info(Icons.event_rounded, date),
+                  if (location.isNotEmpty) _info(Icons.place_rounded, location),
+                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: eventRef.collection('participants').snapshots(),
+                    builder: (context, ps) => _info(
+                        Icons.groups_rounded,
+                        ps.hasData ? '${ps.data!.size}人が参加' : '参加者を読みこみ中'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text('やさしい言葉で話そう。困ったメッセージは、長押しで通報できます。',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _info(IconData icon, String text) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: const Color(0xFFE8845A)),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(text,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF3D2B1F)),
+              overflow: TextOverflow.ellipsis),
+        ),
+      ],
     );
   }
 }

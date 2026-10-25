@@ -47,6 +47,20 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  // 運営かどうか（読めないときは、運営ではないとみなす）
+  late final Future<bool> _isAdminFuture = _checkAdmin();
+
+  Future<bool> _checkAdmin() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+      return doc.exists;
+    } catch (_) {
+      return false;
+    }
+  }
+
 
 
   Map<String, dynamic>? _userData;
@@ -902,12 +916,19 @@ class _ProfilePageState extends State<ProfilePage> {
                               builder: (_) => const ContactPage())),
                     ),
                     const Divider(height: 1),
-                    _MenuItem(
-                      icon: Icons.admin_panel_settings_rounded,
-                      label: '運営管理画面',
-                      onTap: () => Navigator.push(context,
-                          MaterialPageRoute(
-                              builder: (_) => const AdminPage())),
+                    // 運営管理画面は、運営（admins に入っている人）にだけ見せる
+                    FutureBuilder<bool>(
+                      future: _isAdminFuture,
+                      builder: (context, snap) {
+                        if (snap.data != true) return const SizedBox.shrink();
+                        return _MenuItem(
+                          icon: Icons.admin_panel_settings_rounded,
+                          label: '運営管理画面',
+                          onTap: () => Navigator.push(context,
+                              MaterialPageRoute(
+                                  builder: (_) => const AdminPage())),
+                        );
+                      },
                     ),
 
                     _MenuItem(
