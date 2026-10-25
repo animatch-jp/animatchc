@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
+import 'report_page.dart';
 
 const List<Map<String, String>> questionCategories = [
   {'key': 'hospital', 'label': '病院・健康', 'emoji': '🏥'},
@@ -472,6 +473,27 @@ void showQuestionDetail(BuildContext context, String questionId) {
                         ],
 
                         Text(data['body'] ?? '', style: const TextStyle(fontSize: 14, height: 1.6)),
+                        if (!isMine && myUid != null)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ReportPage(
+                                    userName: data['name'] ?? 'このユーザー',
+                                    targetUid: data['uid'] ?? '',
+                                    contentLabel: '質問掲示板の質問',
+                                    contentRef: 'questions/$questionId',
+                                    contentText: '${data['title'] ?? ''} ${data['body'] ?? ''}',
+                                  ),
+                                ),
+                              ),
+                              icon: const Icon(Icons.flag_outlined, size: 16),
+                              label: const Text('この質問を通報', style: TextStyle(fontSize: 12)),
+                              style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                            ),
+                          ),
                         const SizedBox(height: 16),
                         if (isMine && !solved)
                           SizedBox(
@@ -591,6 +613,25 @@ class _AnswerList extends StatelessWidget {
                           onTap: () => _deleteAnswer(doc.id),
                           child: const Icon(Icons.close, size: 16, color: Colors.grey),
                         ),
+                      if (!isMine && myUid != null)
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReportPage(
+                                userName: data['name'] ?? 'このユーザー',
+                                targetUid: data['uid'] ?? '',
+                                contentLabel: '質問掲示板の回答',
+                                contentRef: 'questions/$questionId/answers/${doc.id}',
+                                contentText: data['text'] ?? '',
+                              ),
+                            ),
+                          ),
+                          child: const Tooltip(
+                            message: 'この回答を通報',
+                            child: Icon(Icons.flag_outlined, size: 16, color: Colors.grey),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -620,6 +661,9 @@ class _AnswerList extends StatelessWidget {
     );
   }
 }
+// 回答の文字数の上限（質問の本文と同じ500文字）
+const int _answerMaxLength = 500;
+
 class _AnswerInputBar extends StatefulWidget {
   final String questionId;
   final String questionOwnerUid;
@@ -646,7 +690,7 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
 
   Future<void> _sendAnswer() async {
     final text = _answerCtrl.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || text.length > _answerMaxLength) return;
 
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;
@@ -704,8 +748,10 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
             Expanded(
               child: TextField(
                 controller: _answerCtrl,
+                maxLength: _answerMaxLength,
                 decoration: InputDecoration(
                   hintText: '回答する',
+                  counterText: '',
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
                   filled: true,

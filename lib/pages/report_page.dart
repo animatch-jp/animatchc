@@ -16,7 +16,22 @@ class ReportPage extends StatefulWidget {
   final String userName;
   final String targetUid;
 
-  const ReportPage({super.key, required this.userName, required this.targetUid});
+  // 投稿やメッセージを通報するときだけ使う（人を通報するときは空のまま）
+  // contentLabel: どこの投稿か（例: 質問掲示板の質問）
+  // contentRef: Firestoreの場所（例: questions/abc123）
+  // contentText: 通報する投稿の文（運営が確かめやすいように、先頭だけ送る）
+  final String? contentLabel;
+  final String? contentRef;
+  final String? contentText;
+
+  const ReportPage({
+    super.key,
+    required this.userName,
+    required this.targetUid,
+    this.contentLabel,
+    this.contentRef,
+    this.contentText,
+  });
 
   @override
   State<ReportPage> createState() => _ReportPageState();
@@ -33,12 +48,14 @@ if (_selectedReason == null) return;
 setState(() => _isLoading = true);
 try {
 final myUid = FirebaseAuth.instance.currentUser?.uid;
+// 保存する項目は、これまでと同じにする（Firestoreのルールに合わせるため）。
+// 投稿の通報では、どの投稿かを comment の先頭に書いておく。
 await FirebaseFirestore.instance.collection('reports').add({
 'type': 'user',
 'reporterId': myUid,
 'targetId': widget.targetUid,
 'reason': _selectedReason,
-'comment': _detailCtrl.text.trim(),
+'comment': _buildComment(),
 'createdAt': FieldValue.serverTimestamp(),
 });
 setState(() {
@@ -47,7 +64,24 @@ _isLoading = false;
 });
 } catch (e) {
 setState(() => _isLoading = false);
+if (mounted) {
+ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+content: Text('送れませんでした。時間をおいて、もう一度ためしてください')));
 }
+}
+}
+
+String _buildComment() {
+final detail = _detailCtrl.text.trim();
+final parts = <String>[];
+if (widget.contentLabel != null) parts.add('[${widget.contentLabel}]');
+if (widget.contentRef != null) parts.add('場所: ${widget.contentRef}');
+final text = (widget.contentText ?? '').trim();
+if (text.isNotEmpty) {
+parts.add('内容: ${text.length > 80 ? '${text.substring(0, 80)}…' : text}');
+}
+if (detail.isNotEmpty) parts.add(parts.isEmpty ? detail : '詳細: $detail');
+return parts.join('\n');
 }
 @override
 Widget build(BuildContext context) {
@@ -94,7 +128,7 @@ Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: const Color(0xFFFFF8F5),
     appBar: AppBar(
-      title: Text('${widget.userName}を通報',
+      title: Text(widget.contentLabel != null ? '投稿を通報' : '${widget.userName}を通報',
           style: const TextStyle(fontWeight: FontWeight.w900,
               color: Color(0xFF3D2B1F))),
       backgroundColor: const Color(0xFFFFF8F5),
@@ -183,6 +217,7 @@ Widget build(BuildContext context) {
           TextField(
             controller: _detailCtrl,
             maxLines: 4,
+            maxLength: 300,
             decoration: InputDecoration(
               hintText: '詳しい状況を教えてください',
               border: OutlineInputBorder(

@@ -4,6 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_profile_page.dart';
 import 'notification_prefs.dart';
+import 'report_page.dart';
+
+// グループチャットの1メッセージの文字数の上限
+const int _messageMaxLength = 1000;
 
 class EventChatPage extends StatefulWidget {
   final String eventId;
@@ -113,7 +117,8 @@ class _EventChatPageState extends State<EventChatPage> {
   }
 
   void _sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
+    text = text.trim();
+    if (text.isEmpty || text.length > _messageMaxLength) return;
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;
 
@@ -178,6 +183,39 @@ class _EventChatPageState extends State<EventChatPage> {
         );
       }
     });
+  }
+
+  void _showMessageMenu(
+    BuildContext context, {
+    required String messageId,
+    required String senderUid,
+    required String senderName,
+    required String text,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.flag_outlined, color: Colors.red),
+          title: const Text('このメッセージを通報'),
+          onTap: () {
+            Navigator.pop(sheetContext);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReportPage(
+                  userName: senderName.isNotEmpty ? senderName : 'このユーザー',
+                  targetUid: senderUid,
+                  contentLabel: 'イベントのグループチャット',
+                  contentRef: 'events/${widget.eventId}/messages/$messageId',
+                  contentText: text,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   String _timeAgo(dynamic timestamp) {
@@ -256,6 +294,7 @@ class _EventChatPageState extends State<EventChatPage> {
                     final isMe = data['senderUid'] == myUid;
                     final isSystem = data['isSystem'] == true;
                     final timeStr = _timeAgo(data['createdAt']);
+                    final messageId = messages[i].id;
 
                     if (isSystem) {
                       return Padding(
@@ -342,7 +381,20 @@ class _EventChatPageState extends State<EventChatPage> {
                                           fontSize: 11,
                                           color: Colors.grey[600])),
                                 ),
-                              Container(
+                              GestureDetector(
+                                // 他の人のメッセージを長押しすると、通報できる
+                                onLongPress: isMe
+                                    ? null
+                                    : () => _showMessageMenu(
+                                          context,
+                                          messageId: messageId,
+                                          senderUid:
+                                              data['senderUid'] as String? ?? '',
+                                          senderName:
+                                              data['senderName'] as String? ?? '',
+                                          text: data['text'] as String? ?? '',
+                                        ),
+                                child: Container(
                                 constraints: BoxConstraints(
                                     maxWidth:
                                     MediaQuery.of(context).size.width *
@@ -377,6 +429,7 @@ class _EventChatPageState extends State<EventChatPage> {
                                             : const Color(0xFF3D2B1F),
                                         height: 1.4)),
                               ),
+                              ),
                               const SizedBox(height: 4),
                               Text(timeStr,
                                   style: TextStyle(
@@ -408,8 +461,10 @@ class _EventChatPageState extends State<EventChatPage> {
                 Expanded(
                   child: TextField(
                     controller: _msgCtrl,
+                    maxLength: _messageMaxLength,
                     decoration: InputDecoration(
                       hintText: 'メッセージを入力...',
+                      counterText: '',
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none),
