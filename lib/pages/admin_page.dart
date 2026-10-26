@@ -176,6 +176,54 @@ padding: const EdgeInsets.all(12),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
+// 質問掲示板・イベントのチャットの投稿の通報では、その投稿を消せるようにする
+if (reportedContentPath(data['comment']) != null)
+Padding(
+padding: const EdgeInsets.only(bottom: 8),
+child: SizedBox(
+width: double.infinity,
+child: OutlinedButton.icon(
+onPressed: () async {
+final path = reportedContentPath(data['comment'])!;
+final confirm = await showDialog<bool>(
+context: context,
+builder: (dialogContext) => AlertDialog(
+title: const Text('通報された投稿を削除しますか？'),
+content: const Text('この操作は取り消せません。'),
+actions: [
+TextButton(
+onPressed: () => Navigator.pop(dialogContext, false),
+child: const Text('キャンセル', style: TextStyle(color: Colors.grey)),
+),
+ElevatedButton(
+onPressed: () => Navigator.pop(dialogContext, true),
+style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+child: const Text('削除'),
+),
+],
+),
+);
+if (confirm != true) return;
+try {
+await FirebaseFirestore.instance.doc(path).delete();
+if (context.mounted) {
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(content: Text('投稿を削除しました'), backgroundColor: Colors.grey),
+);
+}
+} catch (_) {
+if (context.mounted) {
+ScaffoldMessenger.of(context).showSnackBar(
+const SnackBar(content: Text('削除できませんでした。Firestoreのルールで止められている可能性があります')),
+);
+}
+}
+},
+icon: const Icon(Icons.delete_forever, color: Colors.red),
+label: const Text('通報された投稿を削除', style: TextStyle(color: Colors.red)),
+),
+),
+),
 if (type == 'petBrag' && data['targetId'] is String)
 FutureBuilder<DocumentSnapshot>(
 future: FirebaseFirestore.instance
@@ -1147,4 +1195,17 @@ Future<void> _deleteUser(String uid) async {
     await FirebaseFirestore.instance.collection('users').doc(uid).delete();
   }
 }
+}
+
+// 投稿の通報のとき、comment の「場所: ...」から、消してよい投稿の場所を取り出す。
+// 質問・回答・イベントのチャットのメッセージ以外は、消せないようにする。
+String? reportedContentPath(dynamic comment) {
+  if (comment is! String || !comment.startsWith('[')) return null;
+  final match = RegExp(r'^場所: (\S+)$', multiLine: true).firstMatch(comment);
+  final path = match?.group(1);
+  if (path == null) return null;
+  const id = r'[A-Za-z0-9_-]+';
+  final allowed = RegExp('^questions/$id(/answers/$id)?\$').hasMatch(path) ||
+      RegExp('^events/$id/messages/$id\$').hasMatch(path);
+  return allowed ? path : null;
 }
