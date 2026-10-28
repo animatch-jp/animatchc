@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'event_page.dart';
+import 'admin_report_tools.dart';
 import 'package:flutter/services.dart';
 
 
@@ -18,6 +19,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
   bool _loading = true;
   String _searchQuery = '';
   bool _showOnlyUnresolved = true;
+  // 入るたびにパスワードで確かめる（この画面を閉じると、また鍵がかかる）
+  bool _unlocked = false;
 
 
 @override
@@ -59,6 +62,9 @@ title: const Text('運営管理画面'),
 ),
 body: const Center(child: Text('アクセス権限がありません')),
 );
+if (!_unlocked) {
+  return AdminLockScreen(onUnlocked: () => setState(() => _unlocked = true));
+}
 
 return Scaffold(
 appBar: AppBar(
@@ -108,6 +114,8 @@ value: _showOnlyUnresolved,
 onChanged: (v) => setState(() => _showOnlyUnresolved = v ?? true),
 ),
 const Text('未対応のみ表示'),
+const Spacer(),
+const ReportSummary(),
 ],
 ),
 ),
@@ -133,13 +141,13 @@ itemBuilder: (context, index) {
 final data = docs[index].data() as Map<String, dynamic>;
 final type = data['type'] as String? ?? '';
 final resolved = data['resolved'] == true;
-final typeLabel = type == 'user' ? '👤 ユーザー通報'
+final typeLabel = reportContentLabel(data['comment']) ?? (type == 'user' ? '👤 ユーザー通報'
 : type == 'event' ? '📅 イベント通報'
 : type == 'chat' ? '💬 チャット通報'
 : type == 'petBrag' ? '🐾 ペット自慢通報'
 : type == 'comment' ? '💬 コメント通報'
 : type == 'hospitalTags' ? '🏥 病院タグ通報'
-: '❓ その他';
+: '❓ その他');
 
 return Card(
 margin: const EdgeInsets.all(8),
@@ -150,6 +158,8 @@ children: [
 Expanded(
 child: Text(typeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
 ),
+if (!resolved && data['targetId'] is String)
+HotBadge(targetId: data['targetId'] as String),
 if (resolved)
 Container(
 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -166,7 +176,7 @@ child: const Text('対応済み', style: TextStyle(fontSize: 10, color: Colors.w
       if (!snap.hasData) return const Text('通報者：読み込み中...');
       if (!snap.data!.exists) return const Text('通報者：不明');
       final name = (snap.data!.data() as Map<String, dynamic>?)?['name'] as String? ?? '不明';
-      return Text('通報者：$name');
+      return Text('通報者：$name　${formatReportTime(data['createdAt'])}');
     },
   ),
 
@@ -176,54 +186,9 @@ padding: const EdgeInsets.all(12),
 child: Column(
 crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-// 質問掲示板・イベントのチャットの投稿の通報では、その投稿を消せるようにする
+// 質問掲示板・イベントのチャットの投稿の通報：中身を見せて、開く・消すができる
 if (reportedContentPath(data['comment']) != null)
-Padding(
-padding: const EdgeInsets.only(bottom: 8),
-child: SizedBox(
-width: double.infinity,
-child: OutlinedButton.icon(
-onPressed: () async {
-final path = reportedContentPath(data['comment'])!;
-final confirm = await showDialog<bool>(
-context: context,
-builder: (dialogContext) => AlertDialog(
-title: const Text('通報された投稿を削除しますか？'),
-content: const Text('この操作は取り消せません。'),
-actions: [
-TextButton(
-onPressed: () => Navigator.pop(dialogContext, false),
-child: const Text('キャンセル', style: TextStyle(color: Colors.grey)),
-),
-ElevatedButton(
-onPressed: () => Navigator.pop(dialogContext, true),
-style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-child: const Text('削除'),
-),
-],
-),
-);
-if (confirm != true) return;
-try {
-await FirebaseFirestore.instance.doc(path).delete();
-if (context.mounted) {
-ScaffoldMessenger.of(context).showSnackBar(
-const SnackBar(content: Text('投稿を削除しました'), backgroundColor: Colors.grey),
-);
-}
-} catch (_) {
-if (context.mounted) {
-ScaffoldMessenger.of(context).showSnackBar(
-const SnackBar(content: Text('削除できませんでした。Firestoreのルールで止められている可能性があります')),
-);
-}
-}
-},
-icon: const Icon(Icons.delete_forever, color: Colors.red),
-label: const Text('通報された投稿を削除', style: TextStyle(color: Colors.red)),
-),
-),
-),
+ReportedContentCard(path: reportedContentPath(data['comment'])!),
 if (type == 'petBrag' && data['targetId'] is String)
 FutureBuilder<DocumentSnapshot>(
 future: FirebaseFirestore.instance
@@ -394,14 +359,15 @@ return Text(
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('対象：$name'),
+            Text('対象のユーザー：$name'),
+            UserActionButtons(uid: data['targetId'] as String),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () => _deleteUser(data['targetId'] as String),
                 icon: const Icon(Icons.block, color: Colors.red),
-                label: const Text('このユーザーを退会させる', style: TextStyle(color: Colors.red)),
+                label: const Text('退会させる（元に戻せない）', style: TextStyle(color: Colors.red)),
                 style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
               ),
             ),
@@ -415,10 +381,10 @@ return Text(
       padding: const EdgeInsets.only(top: 4),
       child: Text('理由：${data['reason']}'),
     ),
-  if (data['comment'] != null)
+  if (reportDetailText(data['comment']) != null)
     Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Text('コメント：${data['comment']}'),
+      child: Text('通報した人のメモ：${reportDetailText(data['comment'])}'),
     ),
   const SizedBox(height: 8),
   if (type == 'event' && data['eventId'] is String)
@@ -1195,17 +1161,4 @@ Future<void> _deleteUser(String uid) async {
     await FirebaseFirestore.instance.collection('users').doc(uid).delete();
   }
 }
-}
-
-// 投稿の通報のとき、comment の「場所: ...」から、消してよい投稿の場所を取り出す。
-// 質問・回答・イベントのチャットのメッセージ以外は、消せないようにする。
-String? reportedContentPath(dynamic comment) {
-  if (comment is! String || !comment.startsWith('[')) return null;
-  final match = RegExp(r'^場所: (\S+)$', multiLine: true).firstMatch(comment);
-  final path = match?.group(1);
-  if (path == null) return null;
-  const id = r'[A-Za-z0-9_-]+';
-  final allowed = RegExp('^questions/$id(/answers/$id)?\$').hasMatch(path) ||
-      RegExp('^events/$id/messages/$id\$').hasMatch(path);
-  return allowed ? path : null;
 }

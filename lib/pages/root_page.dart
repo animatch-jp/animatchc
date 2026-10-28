@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'animal_map_page.dart';
 import '../services/unread_service.dart';
 import '../services/age_utils.dart';
+import 'suspended_page.dart';
 
 class RootPage extends StatefulWidget {
   final int initialIndex;
@@ -23,6 +24,14 @@ class _RootPageState extends State<RootPage> {
   late int _idx;
   final ScrollController _homeScrollController = ScrollController();
   final Set<int> _visitedIndices = {};
+  // 運営に一時停止されたら、すぐに止める画面に切りかえるために、自分のユーザー情報を見ておく
+  final Stream<DocumentSnapshot<Map<String, dynamic>>>? _meStream =
+      FirebaseAuth.instance.currentUser == null
+          ? null
+          : FirebaseFirestore.instance
+              .collection('users')
+              .doc(FirebaseAuth.instance.currentUser!.uid)
+              .snapshots();
 
   @override
   void initState() {
@@ -101,6 +110,18 @@ class _RootPageState extends State<RootPage> {
 
   @override
   Widget build(BuildContext context) {
+    final stream = _meStream;
+    if (stream == null) return _buildMain();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: stream,
+      builder: (context, snap) {
+        if (snap.data?.data()?['suspended'] == true) return const SuspendedPage();
+        return _buildMain();
+      },
+    );
+  }
+
+  Widget _buildMain() {
     final pages = _pages;
     return Scaffold(
       body: IndexedStack(
