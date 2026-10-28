@@ -58,6 +58,7 @@ await FirebaseFirestore.instance.collection('reports').add({
 'comment': _buildComment(),
 'createdAt': FieldValue.serverTimestamp(),
 });
+await _notifyAdmins();
 setState(() {
 _submitted = true;
 _isLoading = false;
@@ -69,6 +70,27 @@ ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
 content: Text('送れませんでした。時間をおいて、もう一度ためしてください')));
 }
 }
+}
+
+// 運営のアカウントのベルに「新しい通報」を届ける（届けられなくても、通報は受け付ける）
+Future<void> _notifyAdmins() async {
+try {
+final admins = await FirebaseFirestore.instance.collection('admins').get();
+for (final a in admins.docs) {
+await FirebaseFirestore.instance
+.collection('notifications')
+.doc(a.id)
+.collection('items')
+.add({
+'type': 'adminReport',
+'emoji': '🚨',
+'title': '新しい通報があります',
+'desc': '運営管理画面で確認してください（理由：${_selectedReason ?? ''}）',
+'read': false,
+'createdAt': FieldValue.serverTimestamp(),
+});
+}
+} catch (_) {}
 }
 
 String _buildComment() {

@@ -17,8 +17,8 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
   late TabController _tabController;
   bool _isAdmin = false;
   bool _loading = true;
-  String _searchQuery = '';
-  bool _showOnlyUnresolved = true;
+  // 通報一覧の表示：open=未対応 / hot=要対応 / done=対応済み / all=すべて
+  String _reportFilter = 'open';
   // 入るたびにパスワードで確かめる（この画面を閉じると、また鍵がかかる）
   bool _unlocked = false;
 
@@ -91,7 +91,7 @@ foregroundColor: Colors.white,
     controller: _tabController,
     children: [
       _buildReportList(),
-      _buildUserList(),
+      const UserReportList(),
       _buildOrganizationRequests(),
       _buildHospitalRequests(),
       _buildContactList(),
@@ -107,15 +107,22 @@ return Column(
 children: [
 Padding(
 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-child: Row(
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
 children: [
-Checkbox(
-value: _showOnlyUnresolved,
-onChanged: (v) => setState(() => _showOnlyUnresolved = v ?? true),
-),
-const Text('未対応のみ表示'),
-const Spacer(),
 const ReportSummary(),
+const SizedBox(height: 6),
+Wrap(
+spacing: 6,
+children: [
+for (final f in const [['open', '未対応'], ['hot', '要対応'], ['done', '対応済み'], ['all', 'すべて']])
+ChoiceChip(
+label: Text(f[1]),
+selected: _reportFilter == f[0],
+onSelected: (_) => setState(() => _reportFilter = f[0]),
+),
+],
+),
 ],
 ),
 ),
@@ -124,17 +131,35 @@ child: StreamBuilder<QuerySnapshot>(
 stream: FirebaseFirestore.instance
 .collection('reports')
 .orderBy('createdAt', descending: true)
+.limit(300)
 .snapshots(),
 builder: (context, snapshot) {
 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 var docs = snapshot.data!.docs;
-if (_showOnlyUnresolved) {
-docs = docs.where((doc) {
-final data = doc.data() as Map<String, dynamic>;
-return data['resolved'] != true;
-}).toList();
+// 要対応：同じ相手が、別々の3人以上から通報されていて、まだ対応していないもの
+final openReporters = <String, Set<String>>{};
+for (final doc in docs) {
+final d = doc.data() as Map<String, dynamic>;
+if (d['resolved'] == true) continue;
+final t = d['targetId'];
+final r = d['reporterId'];
+if (t is String && r is String) (openReporters[t] ??= <String>{}).add(r);
 }
-if (docs.isEmpty) return const Center(child: Text('通報はありません'));
+docs = docs.where((doc) {
+final d = doc.data() as Map<String, dynamic>;
+final done = d['resolved'] == true;
+switch (_reportFilter) {
+case 'open':
+return !done;
+case 'hot':
+return !done && (openReporters[d['targetId']]?.length ?? 0) >= hotReportThreshold;
+case 'done':
+return done;
+default:
+return true;
+}
+}).toList();
+if (docs.isEmpty) return const Center(child: Text('この表示に当てはまる通報はありません'));
 return ListView.builder(
 itemCount: docs.length,
 itemBuilder: (context, index) {
@@ -188,7 +213,7 @@ crossAxisAlignment: CrossAxisAlignment.start,
 children: [
 // 質問掲示板・イベントのチャットの投稿の通報：中身を見せて、開く・消すができる
 if (reportedContentPath(data['comment']) != null)
-ReportedContentCard(path: reportedContentPath(data['comment'])!),
+ReportedContentCard(path: reportedContentPath(data['comment'])!, reportId: docs[index].id),
 if (type == 'petBrag' && data['targetId'] is String)
 FutureBuilder<DocumentSnapshot>(
 future: FirebaseFirestore.instance
@@ -360,7 +385,7 @@ return Text(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('対象のユーザー：$name'),
-            UserActionButtons(uid: data['targetId'] as String),
+            UserActionButtons(uid: data['targetId'] as String, reportId: docs[index].id),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
@@ -450,6 +475,7 @@ return Text(
         ),
       ),
     ),
+  ReportActionLog(actions: data['actions']),
   const SizedBox(height: 8),
   Row(
     children: [
@@ -457,12 +483,7 @@ return Text(
         child: OutlinedButton.icon(
           onPressed: resolved
               ? null
-              : () async {
-            await FirebaseFirestore.instance
-                .collection('reports')
-                .doc(docs[index].id)
-                .update({'resolved': true});
-          },
+              : () => resolveReport(context, docs[index].id, data),
           icon: const Icon(Icons.check_circle_outline),
           label: Text(resolved ? '対応済み' : '対応済みにする'),
           style: OutlinedButton.styleFrom(
@@ -501,54 +522,6 @@ return Text(
 }
 
 
-Widget _buildUserList() {
-  return Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.all(8),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: '名前で検索',
-            prefixIcon: const Icon(Icons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          onChanged: (value) => setState(() => _searchQuery = value),
-        ),
-      ),
-      Expanded(
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('users').snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-            final docs = snapshot.data!.docs.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              final name = data['name']?.toString() ?? '';
-              return _searchQuery.isEmpty || name.contains(_searchQuery);
-            }).toList();
-            if (docs.isEmpty) return const Center(child: Text('ユーザーが見つかりません'));
-            return ListView.builder(
-              itemCount: docs.length,
-              itemBuilder: (context, index) {
-                final data = docs[index].data() as Map<String, dynamic>;
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: ListTile(
-                    title: Text(data['name'] ?? '名前なし'),
-                    subtitle: Text('${data['age']?.toString() ?? ''}歳　${data['prefecture'] ?? ''}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.block, color: Colors.red),
-                      onPressed: () => _deleteUser(docs[index].id),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        ),
-      ),
-    ],
-  );
-}
 Widget _buildOrganizationRequests() {
   return StreamBuilder<QuerySnapshot>(
     stream: FirebaseFirestore.instance

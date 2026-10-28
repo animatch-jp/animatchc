@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
 import '../services/age_utils.dart';
+import '../services/name_rules.dart';
 
 class EditProfilePage extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -233,6 +234,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
             backgroundColor: Colors.red),
       );
       return;
+    }
+    // 名前を変えたときだけ、使える名前か確かめる
+    if (_nameCtrl.text.trim() != (widget.userData['name'] ?? '').toString().trim()) {
+      final nameError = await NameRules.check(_nameCtrl.text,
+          myUid: FirebaseAuth.instance.currentUser?.uid);
+      if (!mounted) return;
+      if (nameError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(nameError), backgroundColor: Colors.red),
+        );
+        return;
+      }
     }
 // 生年月日を、今回はじめて登録するときだけ、年齢を計算する
     int? newAge;

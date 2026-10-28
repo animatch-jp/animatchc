@@ -14,6 +14,7 @@ import 'contact_page.dart';
 import 'login_page.dart';
 import '../services/cloudinary_service.dart';
 import 'admin_page.dart';
+import 'admin_report_tools.dart';
 import 'block_list_page.dart';
 import 'badge_progress_page.dart';
 import 'help_page.dart';
@@ -924,6 +925,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         return _MenuItem(
                           icon: Icons.admin_panel_settings_rounded,
                           label: '運営管理画面',
+                          trailing: const OpenReportCount(),
                           onTap: () => Navigator.push(context,
                               MaterialPageRoute(
                                   builder: (_) => const AdminPage())),
@@ -1191,8 +1193,9 @@ class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Widget? trailing;
   const _MenuItem(
-      {required this.icon, required this.label, required this.onTap});
+      {required this.icon, required this.label, required this.onTap, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -1208,6 +1211,7 @@ class _MenuItem extends StatelessWidget {
                 child: Text(label,
                     style: const TextStyle(fontSize: 15,
                         color: Color(0xFF3D2B1F)))),
+            if (trailing != null) trailing!,
             const Icon(Icons.chevron_right_rounded,
                 color: Colors.grey, size: 20),
           ],

@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/cloudinary_service.dart';
 import '../services/age_utils.dart';
+import '../services/name_rules.dart';
 import 'profile_setup_page2.dart';
 
 class ProfileSetupPage extends StatefulWidget {
@@ -63,11 +64,19 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     if (picked != null) setState(() => _birthDate = picked);
   }
 
-  void _next() {
+  Future<void> _next() async {
     if (_nameCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('ニックネームを入力してください'),
             backgroundColor: Colors.red),
+      );
+      return;
+    }
+    final nameError = await NameRules.check(_nameCtrl.text);
+    if (!mounted) return;
+    if (nameError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(nameError), backgroundColor: Colors.red),
       );
       return;
     }

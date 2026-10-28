@@ -259,7 +259,8 @@ class HotBadge extends StatelessWidget {
 
 class ReportedContentCard extends StatelessWidget {
   final String path;
-  const ReportedContentCard({super.key, required this.path});
+  final String? reportId; // 対応の記録を残す通報
+  const ReportedContentCard({super.key, required this.path, this.reportId});
 
   bool get _isMessage => path.startsWith('events/');
   String get _firstId => path.split('/')[1];
@@ -309,6 +310,7 @@ class ReportedContentCard extends StatelessWidget {
     if (confirm != true) return;
     try {
       await FirebaseFirestore.instance.doc(path).delete();
+      await logReportAction(reportId, 'delete_post');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('投稿を削除しました'), backgroundColor: Colors.grey));
@@ -389,7 +391,8 @@ class ReportedContentCard extends StatelessWidget {
 
 class UserActionButtons extends StatelessWidget {
   final String uid;
-  const UserActionButtons({super.key, required this.uid});
+  final String? reportId; // 対応の記録を残す通報
+  const UserActionButtons({super.key, required this.uid, this.reportId});
 
   Future<void> _setSuspended(BuildContext context, bool suspend) async {
     final confirm = await showDialog<bool>(
@@ -419,6 +422,7 @@ class UserActionButtons extends StatelessWidget {
         'suspended': suspend,
         'suspendedAt': suspend ? FieldValue.serverTimestamp() : FieldValue.delete(),
       });
+      await logReportAction(reportId, suspend ? 'suspend' : 'unsuspend');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(suspend ? '一時停止しました' : '一時停止を解除しました'),
@@ -465,6 +469,359 @@ class UserActionButtons extends StatelessWidget {
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+/* ---------------- 対応の記録と、通報した人への連絡 ---------------- */
+
+const Map<String, String> _actionLabels = {
+  'resolve': '対応済みにした',
+  'delete_post': '投稿を削除した',
+  'suspend': '一時停止した',
+  'unsuspend': '一時停止を解除した',
+  'delete_user': '退会させた',
+};
+
+// 通報ごとに「いつ・何をしたか」を残す
+Future<void> logReportAction(String? reportId, String action) async {
+  if (reportId == null) return;
+  try {
+    await FirebaseFirestore.instance.collection('reports').doc(reportId).update({
+      'actions': FieldValue.arrayUnion([
+        {
+          'action': action,
+          'at': Timestamp.now(),
+          'by': FirebaseAuth.instance.currentUser?.uid ?? '',
+        }
+      ]),
+    });
+  } catch (_) {
+    // 記録できなくても、対応そのものは止めない
+  }
+}
+
+// 対応済みにして、通報した人に「対応しました」と知らせる
+Future<void> resolveReport(
+    BuildContext context, String reportId, Map<String, dynamic> data) async {
+  try {
+    await FirebaseFirestore.instance.collection('reports').doc(reportId).update({
+      'resolved': true,
+      'resolvedAt': FieldValue.serverTimestamp(),
+    });
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('対応済みにできませんでした')));
+    }
+    return;
+  }
+  await logReportAction(reportId, 'resolve');
+  final reporterId = data['reporterId'];
+  if (reporterId is String && reporterId.isNotEmpty) {
+    try {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(reporterId)
+          .collection('items')
+          .add({
+        'type': 'reportHandled',
+        'emoji': '✅',
+        'title': '通報への対応が終わりました',
+        'desc': 'ご報告ありがとうございました。運営が内容を確かめて、対応しました。',
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('対応済みにして、通報した人に知らせました'), backgroundColor: Colors.grey));
+  }
+}
+
+// 通報のカードの中に出す「対応の記録」
+class ReportActionLog extends StatelessWidget {
+  final dynamic actions;
+  const ReportActionLog({super.key, required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    if (actions is! List || (actions as List).isEmpty) return const SizedBox.shrink();
+    final list = (actions as List).whereType<Map>().toList();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('対応の記録', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          const SizedBox(height: 4),
+          ...list.map((a) => Text(
+                '${formatReportTime(a['at'])}　${_actionLabels[a['action']] ?? a['action']}',
+                style: const TextStyle(fontSize: 12, color: _brown),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+/* ---------------- 通報を「人ごと」にまとめる ---------------- */
+
+class ReportStats {
+  final Set<String> reporters = {};
+  final Set<String> openReporters = {};
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> reports = [];
+}
+
+Map<String, ReportStats> buildReportStats(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+  final map = <String, ReportStats>{};
+  for (final d in docs) {
+    final t = d.data()['targetId'];
+    final r = d.data()['reporterId'];
+    if (t is! String || t.isEmpty) continue;
+    final s = map[t] ??= ReportStats();
+    s.reports.add(d);
+    if (r is String) {
+      s.reporters.add(r);
+      if (d.data()['resolved'] != true) s.openReporters.add(r);
+    }
+  }
+  return map;
+}
+
+// ユーザー管理：通報された人数の多い順に並べ、押すとその人への通報が全部見られる
+class UserReportList extends StatefulWidget {
+  const UserReportList({super.key});
+
+  @override
+  State<UserReportList> createState() => _UserReportListState();
+}
+
+class _UserReportListState extends State<UserReportList> {
+  String _query = '';
+  bool _onlyReported = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('reports').snapshots(),
+      builder: (context, repSnap) {
+        final stats = repSnap.hasData
+            ? buildReportStats(repSnap.data!.docs)
+            : <String, ReportStats>{};
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: '名前で検索',
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: (v) => setState(() => _query = v.trim()),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('通報された人だけ'),
+                    selected: _onlyReported,
+                    onSelected: (v) => setState(() => _onlyReported = v),
+                  ),
+                  const Spacer(),
+                  Text('3人以上の通報で「要対応」',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                builder: (context, snap) {
+                  if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                  var users = snap.data!.docs.where((d) {
+                    final name = d.data()['name']?.toString() ?? '';
+                    if (_query.isNotEmpty && !name.contains(_query)) return false;
+                    if (_onlyReported && !stats.containsKey(d.id)) return false;
+                    return true;
+                  }).toList();
+                  users.sort((a, b) {
+                    final ca = stats[a.id]?.openReporters.length ?? 0;
+                    final cb = stats[b.id]?.openReporters.length ?? 0;
+                    if (ca != cb) return cb.compareTo(ca);
+                    final ta = stats[a.id]?.reporters.length ?? 0;
+                    final tb = stats[b.id]?.reporters.length ?? 0;
+                    return tb.compareTo(ta);
+                  });
+                  if (users.isEmpty) {
+                    return Center(
+                        child: Text(_onlyReported ? '通報された人はいません' : 'ユーザーが見つかりません'));
+                  }
+                  return ListView.builder(
+                    itemCount: users.length,
+                    itemBuilder: (context, i) {
+                      final u = users[i];
+                      final d = u.data();
+                      final s = stats[u.id];
+                      final open = s?.openReporters.length ?? 0;
+                      final total = s?.reporters.length ?? 0;
+                      final suspended = d['suspended'] == true;
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: ListTile(
+                          title: Row(
+                            children: [
+                              Flexible(
+                                child: Text(d['name']?.toString() ?? '名前なし',
+                                    overflow: TextOverflow.ellipsis),
+                              ),
+                              if (suspended) _tag('停止中', Colors.grey),
+                              if (open >= hotReportThreshold) _tag('要対応', Colors.red),
+                            ],
+                          ),
+                          subtitle: Text(
+                              '${d['age']?.toString() ?? '-'}歳　${d['prefecture'] ?? ''}　ID: ${u.id.substring(0, u.id.length < 6 ? u.id.length : 6)}'),
+                          trailing: total == 0
+                              ? null
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('$total人が通報',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: open >= hotReportThreshold ? Colors.red : _brown)),
+                                    Text('未対応 $open', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                                  ],
+                                ),
+                          onTap: () => _openUserSheet(context, u.id, d['name']?.toString() ?? '名前なし', s),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _tag(String text, Color color) => Container(
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+        child: Text(text, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+      );
+
+  void _openUserSheet(BuildContext context, String uid, String name, ReportStats? s) {
+    final reports = [...?s?.reports];
+    reports.sort((a, b) {
+      final ta = a.data()['createdAt'];
+      final tb = b.data()['createdAt'];
+      if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+      return 0;
+    });
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * 0.85,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _brown)),
+            Text('${s?.reporters.length ?? 0}人から、${reports.length}件の通報',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            UserActionButtons(uid: uid),
+            const SizedBox(height: 16),
+            if (reports.isEmpty)
+              const Text('通報はありません', style: TextStyle(color: Colors.grey)),
+            ...reports.map((r) {
+              final rd = r.data();
+              final path = reportedContentPath(rd['comment']);
+              final resolved = rd['resolved'] == true;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: resolved ? Colors.grey[100] : const Color(0xFFFFF8F5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFF3E1D7)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                              '${reportContentLabel(rd['comment']) ?? '👤 ユーザーへの通報'}　${formatReportTime(rd['createdAt'])}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ),
+                        if (resolved) _tag('対応済み', Colors.grey),
+                      ],
+                    ),
+                    if (rd['reason'] != null) Text('理由：${rd['reason']}', style: const TextStyle(fontSize: 12)),
+                    if (reportDetailText(rd['comment']) != null)
+                      Text('通報した人のメモ：${reportDetailText(rd['comment'])}', style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 8),
+                    if (path != null) ReportedContentCard(path: path, reportId: r.id),
+                    ReportActionLog(actions: rd['actions']),
+                    if (!resolved)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => resolveReport(context, r.id, rd),
+                          icon: const Icon(Icons.check_circle_outline, size: 18),
+                          label: const Text('対応済みにする'),
+                          style: TextButton.styleFrom(foregroundColor: _green),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// プロフィールの「運営管理画面」のとなりに出す、未対応の数
+class OpenReportCount extends StatelessWidget {
+  const OpenReportCount({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('reports').snapshots(),
+      builder: (context, snap) {
+        // resolved が無い通報も「未対応」に数える
+        final n = snap.data?.docs.where((d) => d.data()['resolved'] != true).length ?? 0;
+        if (n == 0) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+          child: Text('未対応 $n', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
         );
       },
     );
