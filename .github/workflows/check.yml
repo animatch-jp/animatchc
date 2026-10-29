@@ -1,0 +1,37 @@
+# 保存（push）するたびに、アプリを組み立てて、エラーがないか自動で調べる
+name: アプリのチェック
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutterのバージョン
+        run: flutter --version
+
+      - name: 部品をそろえる
+        run: flutter pub get
+
+      - name: コードの点検（エラーだけで止める）
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Web版を組み立てる
+        run: flutter build web --release
+
+      - name: 組み立てたWeb版を保存する
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+          retention-days: 7
