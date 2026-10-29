@@ -23,11 +23,38 @@ jobs:
       - name: 部品をそろえる
         run: flutter pub get
 
+      # 結果を「注釈」として残す（Claudeが GitHub の API から読めるようにするため）
       - name: コードの点検（エラーだけで止める）
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings > analyze.txt 2>&1
+          code=$?
+          cat analyze.txt
+          grep -E '^ *error • ' analyze.txt | head -50 | while IFS= read -r line; do
+            msg=$(echo "$line" | awk -F' • ' '{print $2}')
+            loc=$(echo "$line" | awk -F' • ' '{print $3}')
+            file=${loc%%:*}; rest=${loc#*:}; ln=${rest%%:*}
+            echo "::error file=$file,line=$ln::$msg"
+          done
+          w=$(grep -cE '^ *warning • ' analyze.txt)
+          i=$(grep -cE '^ *info • ' analyze.txt)
+          echo "::notice title=点検の結果::warning ${w}件、info ${i}件"
+          exit $code
 
       - name: Web版を組み立てる
-        run: flutter build web --release
+        shell: bash
+        run: |
+          set +e
+          flutter build web --release > build.txt 2>&1
+          code=$?
+          cat build.txt
+          if [ $code -ne 0 ]; then
+            grep -E 'Error|error' build.txt | head -40 | while IFS= read -r line; do
+              echo "::error title=組み立て::$line"
+            done
+          fi
+          exit $code
 
       - name: 組み立てたWeb版を保存する
         uses: actions/upload-artifact@v4
