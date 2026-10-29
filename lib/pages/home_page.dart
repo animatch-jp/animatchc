@@ -92,7 +92,7 @@ class _HomePageState extends State<HomePage> {
                                               fontWeight: FontWeight.w900,
                                               color: Color(0xFF3D2B1F))),
                                     ),
-                                    body: const PetBragPage(initialTabIndex: 2),
+                                    body: const PetBragPage(initialTabIndex: 3),
                                   ))),
 
 
