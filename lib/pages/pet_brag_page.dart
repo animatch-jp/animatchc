@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -79,25 +80,37 @@ void showPostDetail(BuildContext context, String postId) {
                                 Text(data['comment'], style: const TextStyle(fontSize: 15, height: 1.5)),
                               ],
                               const SizedBox(height: 24),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                children: [
-                                  _VoteButton(
-                                      emoji: '😍',
-                                      label: 'かわいい',
-                                      count: votes['kawaii'] ?? 0,
-                                      onTap: () => vote(context, postId, 'kawaii')),
-                                  _VoteButton(
-                                      emoji: '🤣',
-                                      label: 'おもしろい',
-                                      count: votes['omoshiroi'] ?? 0,
-                                      onTap: () => vote(context, postId, 'omoshiroi')),
-                                  _VoteButton(
-                                      emoji: '🥹',
-                                      label: '癒される',
-                                      count: votes['iyashi'] ?? 0,
-                                      onTap: () => vote(context, postId, 'iyashi')),
-                                ],
+                              StreamBuilder<DocumentSnapshot>(
+                                stream: FirebaseAuth.instance.currentUser == null
+                                    ? null
+                                    : FirebaseFirestore.instance
+                                        .collection('petBrags')
+                                        .doc(postId)
+                                        .collection('voters')
+                                        .doc(FirebaseAuth.instance.currentUser!.uid)
+                                        .snapshots(),
+                                builder: (context, vs) {
+                                  final myVote = (vs.data?.data()
+                                      as Map<String, dynamic>?)?['voteType'] as String?;
+                                  return Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      for (final v in const [
+                                        ('kawaii', '😍', 'かわいい'),
+                                        ('omoshiroi', '🤣', 'おもしろい'),
+                                        ('iyashi', '🥹', '癒される'),
+                                      ])
+                                        _VoteButton(
+                                          voteKey: v.$1,
+                                          emoji: v.$2,
+                                          label: v.$3,
+                                          count: (votes[v.$1] as num?)?.toInt() ?? 0,
+                                          myVote: myVote,
+                                          onTap: () => vote(context, postId, v.$1),
+                                        ),
+                                    ],
+                                  );
+                                },
                               ),
                               const SizedBox(height: 20),
                               Text('コメント (${data['commentCount'] ?? 0})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -1367,30 +1380,125 @@ class _RecommendedListState extends State<_RecommendedList> {
 
 
 
-class _VoteButton extends StatelessWidget {
+class _VoteButton extends StatefulWidget {
   final String emoji;
   final String label;
   final int count;
   final VoidCallback onTap;
+  // この投稿に、自分がもう投票したもの（null = まだ）
+  final String? myVote;
+  final String voteKey;
 
   const _VoteButton({
     required this.emoji,
     required this.label,
     required this.count,
     required this.onTap,
+    required this.voteKey,
+    this.myVote,
   });
 
   @override
+  State<_VoteButton> createState() => _VoteButtonState();
+}
+
+// 押すと、ぽんっとはずんで、絵文字が3つふわっと上がる。
+// もう投票ずみのときは、小さく首をふる。
+class _VoteButtonState extends State<_VoteButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 750));
+  bool _burst = false;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  void _tap() {
+    setState(() => _burst = widget.myVote == null);
+    _c.forward(from: 0);
+    widget.onTap();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final chosen = widget.myVote == widget.voteKey;
     return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(height: 2),
-          Text(count > 0 ? '$count' : '',
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        ],
+      onTap: _tap,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = _c.value;
+          final pop = _burst ? 1 + 0.35 * math.sin(math.min(t * 2, 1) * math.pi) : 1.0;
+          final shake = _burst ? 0.0 : math.sin(t * math.pi * 6) * (1 - t) * 6;
+          return SizedBox(
+            width: 92,
+            height: 92,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 84,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: chosen ? const Color(0xFFFFE9DF) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                        color: chosen ? const Color(0xFFE8845A) : Colors.transparent,
+                        width: 1.5),
+                  ),
+                  child: Transform.translate(
+                    offset: Offset(shake, 0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Transform.scale(
+                          scale: pop,
+                          child: Text(widget.emoji, style: const TextStyle(fontSize: 26)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(widget.label,
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: chosen ? const Color(0xFFE8845A) : Colors.grey[700])),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (child, a) => SlideTransition(
+                            position: Tween(begin: const Offset(0, 0.6), end: Offset.zero).animate(a),
+                            child: FadeTransition(opacity: a, child: child),
+                          ),
+                          child: Text('${widget.count}',
+                              key: ValueKey(widget.count),
+                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_burst && t > 0 && t < 1)
+                  ...List.generate(3, (i) {
+                    final dx = (i - 1) * 18.0;
+                    final rise = Curves.easeOut.transform(t) * (50 + i * 8);
+                    return Positioned(
+                      top: 10 - rise,
+                      left: 46 + dx - 10 + math.sin(t * math.pi * 2 + i) * 6,
+                      child: IgnorePointer(
+                        child: Opacity(
+                          opacity: (1 - t).clamp(0.0, 1.0),
+                          child: Text(widget.emoji, style: const TextStyle(fontSize: 18)),
+                        ),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
