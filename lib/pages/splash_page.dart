@@ -29,6 +29,9 @@ class _SplashPageState extends State<SplashPage>
   late final AnimationController _pop;
   // タップしたところから、肉球がぱっと広がる
   final List<_Burst> _bursts = [];
+  // 次に開く画面（ログイン・ホームなど）。タップされるまで待つ。
+  Widget? _next;
+  bool _leaving = false;
 
   static const _orange = Color(0xFFE8845A);
   static const _green = Color(0xFF4E8A6E);
@@ -48,9 +51,8 @@ class _SplashPageState extends State<SplashPage>
       vsync: this,
       duration: const Duration(milliseconds: 450),
     );
-    Future.delayed(const Duration(milliseconds: 3000), () {
-      _checkLoginState();
-    });
+    // 動きを見せている間に、次の画面を調べておく（タップされたらすぐ進める）
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkLoginState());
   }
 
   // 0〜1 の中の、start〜end の間だけ動く値
@@ -61,11 +63,23 @@ class _SplashPageState extends State<SplashPage>
 
   Future<void> _checkLoginState() async {
     if (!mounted) return;
-    setState(() => _hasError = false);
-    final user = FirebaseAuth.instance.currentUser;
+    setState(() {
+      _hasError = false;
+      _next = null;
+    });
+    // Web版では、ログイン状態の読みこみに少し時間がかかるので、最初の知らせを待つ
+    User? user;
+    try {
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      user = FirebaseAuth.instance.currentUser;
+    }
+    if (!mounted) return;
     if (user == null) {
-      Navigator.pushReplacement(context,
-          MaterialPageRoute(builder: (_) => const LoginPage()));
+      setState(() => _next = const LoginPage());
       return;
     }
 
@@ -79,11 +93,9 @@ class _SplashPageState extends State<SplashPage>
         final status = orgDoc.data()?['status'] ?? 'pending';
         if (!mounted) return;
         if (status == 'approved') {
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const OrganizationHomePage()));
+          setState(() => _next = const OrganizationHomePage());
         } else {
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const OrganizationPendingPage()));
+          setState(() => _next = const OrganizationPendingPage());
         }
         return;
       }
@@ -97,11 +109,9 @@ class _SplashPageState extends State<SplashPage>
         final status = hospitalDoc.data()?['status'] ?? 'pending';
         if (!mounted) return;
         if (status == 'approved') {
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const HospitalHomePage()));
+          setState(() => _next = const HospitalHomePage());
         } else {
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const HospitalPendingPage()));
+          setState(() => _next = const HospitalPendingPage());
         }
         return;
       }
@@ -112,11 +122,9 @@ class _SplashPageState extends State<SplashPage>
           .get();
       if (!mounted) return;
       if (!userDoc.exists) {
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => const ProfileSetupPage()));
+        setState(() => _next = const ProfileSetupPage());
       } else {
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => const RootPage()));
+        setState(() => _next = const RootPage());
       }
     } catch (e) {
       if (!mounted) return;
@@ -136,7 +144,29 @@ class _SplashPageState extends State<SplashPage>
     super.dispose();
   }
 
+  // 動きが終わって、次の画面もわかっていれば、タップで進める
+  bool get _ready => _next != null && _intro.value >= 0.85 && !_hasError;
+
+  void _go() {
+    if (_leaving || _next == null) return;
+    _leaving = true;
+    final next = _next!;
+    Future.delayed(const Duration(milliseconds: 380), () {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 450),
+          pageBuilder: (_, __, ___) => next,
+          transitionsBuilder: (_, a, __, child) =>
+              FadeTransition(opacity: a, child: child),
+        ),
+      );
+    });
+  }
+
   void _onTap(TapDownDetails d) {
+    if (_ready) _go();
     _pop.forward(from: 0);
     final ctrl = AnimationController(
       vsync: this,
@@ -262,6 +292,30 @@ class _SplashPageState extends State<SplashPage>
     );
   }
 
+  // 準備ができたら：「タップしてはじめる」
+  Widget _tapHint() {
+    final hop = math.sin(_loop.value * math.pi * 2);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Transform.translate(
+          offset: Offset(0, -4 * hop.abs()),
+          child: const Icon(Icons.touch_app_rounded, color: _orange, size: 30),
+        ),
+        const SizedBox(height: 6),
+        Opacity(
+          opacity: 0.6 + 0.4 * hop.abs(),
+          child: const Text('タップしてはじめる',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                  color: Color(0xFF3D2B1F))),
+        ),
+      ],
+    );
+  }
+
   // 読みこみ中：肉球が3つ、順番にぴょこぴょこ
   Widget _loadingPaws() {
     return Row(
@@ -350,7 +404,9 @@ class _SplashPageState extends State<SplashPage>
                                   child: const Text('もう一度試す'),
                                 ),
                               ])
-                            : _loadingPaws(),
+                            : _ready
+                                ? _tapHint()
+                                : _loadingPaws(),
                       ),
                     ),
                   ],
