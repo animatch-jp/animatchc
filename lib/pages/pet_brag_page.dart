@@ -1394,9 +1394,12 @@ class _VoteButton extends StatefulWidget {
     required this.label,
     required this.count,
     required this.onTap,
-    required this.voteKey,
+    this.voteKey = '',
     this.myVote,
   });
+
+  // 一覧のカードの中など、小さく出すとき（voteKey なし）
+  bool get compact => voteKey.isEmpty;
 
   @override
   State<_VoteButton> createState() => _VoteButtonState();
@@ -1433,6 +1436,48 @@ class _VoteButtonState extends State<_VoteButton>
           final t = _c.value;
           final pop = _burst ? 1 + 0.35 * math.sin(math.min(t * 2, 1) * math.pi) : 1.0;
           final shake = _burst ? 0.0 : math.sin(t * math.pi * 6) * (1 - t) * 6;
+          if (widget.compact) {
+            return SizedBox(
+              width: 60,
+              height: 52,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Transform.scale(
+                        scale: pop,
+                        child: Text(widget.emoji, style: const TextStyle(fontSize: 22)),
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: Text(widget.count > 0 ? '${widget.count}' : '',
+                            key: ValueKey(widget.count),
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      ),
+                    ],
+                  ),
+                  if (_burst && t > 0 && t < 1)
+                    ...List.generate(3, (i) {
+                      final rise = Curves.easeOut.transform(t) * (36 + i * 6);
+                      return Positioned(
+                        top: 4 - rise,
+                        left: 21 + (i - 1) * 14.0 + math.sin(t * math.pi * 2 + i) * 4,
+                        child: IgnorePointer(
+                          child: Opacity(
+                            opacity: (1 - t).clamp(0.0, 1.0),
+                            child: Text(widget.emoji, style: const TextStyle(fontSize: 14)),
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            );
+          }
           return SizedBox(
             width: 92,
             height: 92,
