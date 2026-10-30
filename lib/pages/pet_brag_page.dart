@@ -7,6 +7,7 @@ import 'monthly_themes.dart';
 import 'hospital_tags.dart';
 import 'notification_prefs.dart';
 import 'package:in_app_review/in_app_review.dart';
+import 'ranking_page.dart';
 
 
 
@@ -277,7 +278,7 @@ class _PetBragPageState extends State<PetBragPage>
               _currentTabIndex == 0
                   ? '※直近30日以内の投稿からランダムに表示されます'
                   : _currentTabIndex == 3
-                  ? '※直近7日間の投稿が対象のランキングです'
+                  ? '※月曜〜日曜の1週間で集計します'
                   : '※直近30日以内の投稿が表示されます',
               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
             ),
@@ -289,7 +290,7 @@ class _PetBragPageState extends State<PetBragPage>
               const _RecommendedList(),
               _PetBragList(orderByField: 'createdAt'),
               _PetBragList(orderByField: 'voteCount'),
-              const _WeeklyRankingList(),
+              const WeeklyRankingView(),
               const _MyPostsList(),
             ],
           ),
@@ -1972,182 +1973,6 @@ class _PostMonthlyBragSheetState extends State<_PostMonthlyBragSheet> {
     );
   }
 }
-class _WeeklyRankingList extends StatefulWidget {
-  const _WeeklyRankingList();
-
-  @override
-  State<_WeeklyRankingList> createState() => _WeeklyRankingListState();
-}
-
-class _WeeklyRankingListState extends State<_WeeklyRankingList> {
-  String _category = 'kawaii';
-
-  static const _categories = {
-    'kawaii': ('😍', 'かわいい部門'),
-    'omoshiroi': ('🤣', 'おもしろい部門'),
-    'iyashi': ('🥹', '癒される部門'),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: _categories.entries.map((entry) {
-              final sel = _category == entry.key;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _category = entry.key),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                        color: sel
-                            ? const Color(0xFFE8845A)
-                            : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(14)),
-                    child: Column(
-                      children: [
-                        Text(entry.value.$1,
-                            style: const TextStyle(fontSize: 18)),
-                        Text(entry.value.$2,
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: sel ? Colors.white : Colors.grey[700],
-                                fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('petBrags')
-              .where('createdAt', isGreaterThan: Timestamp.fromDate(weekAgo))
-              .orderBy('createdAt')
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)));
-            }
-            final docs = snapshot.data!.docs.toList();
-            docs.sort((a, b) {
-              final aVotes = ((a.data() as Map<String, dynamic>)['votes']
-              as Map<String, dynamic>?)?[_category] ??
-                  0;
-              final bVotes = ((b.data() as Map<String, dynamic>)['votes']
-              as Map<String, dynamic>?)?[_category] ??
-                  0;
-              return (bVotes as int).compareTo(aVotes as int);
-            });
-
-            if (docs.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text('今週の投稿はまだありません',
-                      style: TextStyle(color: Colors.grey)),
-                ),
-              );
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: docs.length,
-              itemBuilder: (_, i) {
-                final data = docs[i].data() as Map<String, dynamic>;
-                final votes = data['votes'] as Map<String, dynamic>? ?? {};
-                final voteCount = votes[_category] ?? 0;
-                final rank = i + 1;
-                final medal = rank == 1
-                    ? '🥇'
-                    : rank == 2
-                    ? '🥈'
-                    : rank == 3
-                    ? '🥉'
-                    : '${rank}位';
-
-                return GestureDetector(
-                  onTap: () => showPostDetail(context, docs[i].id),
-
-
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: rank == 1
-                          ? const Color(0xFFFFF3CD)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2))
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          child: Text(medal,
-                              style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold),
-                              textAlign: TextAlign.center),
-                        ),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: data['imageUrl'] != null &&
-                              (data['imageUrl'] as String).isNotEmpty
-                              ? Image.network(data['imageUrl'] as String,
-                              width: 60, height: 60, fit: BoxFit.cover)
-                              : Container(
-                            width: 60,
-                            height: 60,
-                            color: Colors.orange[50],
-                            child: const Center(child: Text('🐾')),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(data['petName'] ?? '',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF3D2B1F))),
-                              Text(data['theme'] ?? '',
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.grey[600])),
-                            ],
-                          ),
-                        ),
-                        Text('$voteCount票',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFE8845A))),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
 class _MonthlyBestList extends StatelessWidget {
 
   const _MonthlyBestList();
@@ -2754,7 +2579,7 @@ class _HomeFeedSectionState extends State<HomeFeedSection>
               _currentTabIndex == 0
                   ? '※直近30日以内の投稿からランダムに表示されます'
                   : _currentTabIndex == 3
-                  ? '※直近7日間の投稿が対象のランキングです'
+                  ? '※月曜〜日曜の1週間で集計します'
                   : '※直近30日以内の投稿が表示されます',
               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
             ),
@@ -2769,7 +2594,7 @@ class _HomeFeedSectionState extends State<HomeFeedSection>
               case 2:
                 return const _PetBragList(orderByField: 'voteCount');
               case 3:
-                return const _WeeklyRankingList();
+                return const WeeklyRankingView(embedded: true);
               case 4:
                 return const _MyPostsList();
               default:

@@ -6,6 +6,7 @@ import 'lost_pet_page.dart';
 import 'adoption_page.dart';
 import 'volunteer_page.dart';
 import 'pet_brag_page.dart';
+import 'ranking_page.dart';
 import 'question_board_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -81,19 +82,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         GestureDetector(
                           onTap: () => Navigator.push(context,
-                              MaterialPageRoute(
-                                  builder: (_) => Scaffold(
-                                    backgroundColor: const Color(0xFFFFF8F5),
-                                    appBar: AppBar(
-                                      backgroundColor: const Color(0xFFFFF8F5),
-                                      elevation: 0,
-                                      title: const Text('ランキング 🏆',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                              color: Color(0xFF3D2B1F))),
-                                    ),
-                                    body: const PetBragPage(initialTabIndex: 3),
-                                  ))),
+                              MaterialPageRoute(builder: (_) => const RankingPage())),
 
 
                           child: Container(
