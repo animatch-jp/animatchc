@@ -25,6 +25,10 @@ class _SplashPageState extends State<SplashPage>
   // ずっとくり返す動き（背景の丸、読みこみ中の肉球）
   late final AnimationController _loop;
   bool _hasError = false;
+  // タップしたとき：ロゴがはずむ
+  late final AnimationController _pop;
+  // タップしたところから、肉球がぱっと広がる
+  final List<_Burst> _bursts = [];
 
   static const _orange = Color(0xFFE8845A);
   static const _green = Color(0xFF4E8A6E);
@@ -40,6 +44,10 @@ class _SplashPageState extends State<SplashPage>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
+    _pop = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
     Future.delayed(const Duration(milliseconds: 3000), () {
       _checkLoginState();
     });
@@ -121,7 +129,57 @@ class _SplashPageState extends State<SplashPage>
   void dispose() {
     _intro.dispose();
     _loop.dispose();
+    _pop.dispose();
+    for (final b in _bursts) {
+      b.ctrl.dispose();
+    }
     super.dispose();
+  }
+
+  void _onTap(TapDownDetails d) {
+    _pop.forward(from: 0);
+    final ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    final burst = _Burst(d.localPosition, ctrl, _bursts.length.isEven);
+    setState(() => _bursts.add(burst));
+    ctrl.forward().whenComplete(() {
+      if (!mounted) return;
+      setState(() => _bursts.remove(burst));
+      ctrl.dispose();
+    });
+  }
+
+  // タップしたところから、6つの肉球が外へ広がる
+  Widget _burstWidget(_Burst b) {
+    return AnimatedBuilder(
+      animation: b.ctrl,
+      builder: (context, _) {
+        final t = Curves.easeOut.transform(b.ctrl.value);
+        return Stack(
+          children: List.generate(6, (i) {
+            final angle = i / 6 * math.pi * 2 + (b.flip ? 0.5 : 0);
+            final dist = 70 * t;
+            return Positioned(
+              left: b.pos.dx + math.cos(angle) * dist - 11,
+              top: b.pos.dy + math.sin(angle) * dist - 11,
+              child: Opacity(
+                opacity: (1 - b.ctrl.value).clamp(0.0, 1.0),
+                child: Transform.rotate(
+                  angle: angle + math.pi / 2,
+                  child: Transform.scale(
+                    scale: 0.5 + 0.7 * t,
+                    child: Icon(Icons.pets,
+                        size: 22, color: i.isEven ? _orange : _green),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
+    );
   }
 
   // 下から歩いてくる足あと（左右交互）
@@ -232,7 +290,7 @@ class _SplashPageState extends State<SplashPage>
     return Scaffold(
       backgroundColor: Colors.white,
       body: AnimatedBuilder(
-        animation: Listenable.merge([_intro, _loop]),
+        animation: Listenable.merge([_intro, _loop, _pop]),
         builder: (context, _) {
           final logoIn = _part(0.35, 0.75, curve: Curves.elasticOut);
           final logoFade = _part(0.35, 0.5);
@@ -240,7 +298,11 @@ class _SplashPageState extends State<SplashPage>
               0.04 *
               (1 - _part(0.35, 0.8));
           final bottomIn = _part(0.8, 1.0);
-          return Stack(
+          final popScale = 1 + 0.12 * math.sin(_pop.value * math.pi);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: _onTap,
+            child: Stack(
             children: [
               Positioned.fill(child: _footsteps(size.width)),
               Center(child: _ripples(size.width * 0.9)),
@@ -253,7 +315,7 @@ class _SplashPageState extends State<SplashPage>
                       child: Transform.rotate(
                         angle: wobble,
                         child: Transform.scale(
-                          scale: 0.5 + 0.5 * logoIn,
+                          scale: (0.5 + 0.5 * logoIn) * popScale,
                           child: _shine(Image.asset(
                             'assets/images/logo.png',
                             width: size.width * 0.8,
@@ -294,10 +356,19 @@ class _SplashPageState extends State<SplashPage>
                   ],
                 ),
               ),
+              ..._bursts.map((b) => Positioned.fill(child: IgnorePointer(child: _burstWidget(b)))),
             ],
+          ),
           );
         },
       ),
     );
   }
+}
+
+class _Burst {
+  _Burst(this.pos, this.ctrl, this.flip);
+  final Offset pos;
+  final AnimationController ctrl;
+  final bool flip;
 }
