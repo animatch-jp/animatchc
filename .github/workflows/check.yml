@@ -3,7 +3,13 @@ name: アプリのチェック
 
 on:
   push:
+    branches-ignore: [gh-pages]
   workflow_dispatch:
+
+# 同じブランチで続けて保存したときは、古いチェックを止めて新しい方だけ動かす
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -68,7 +74,9 @@ jobs:
 
       # テスト用のWeb版を、GitHubのページ（gh-pages）に置く。
       # https://animatch-jp.github.io/animatchc/ で開ける（最後に保存した版が出る）
+      # 公開は main のときだけ（ほかのブランチと同時に書いてぶつからないように）
       - name: テスト用のWeb版を公開する
+        if: github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
