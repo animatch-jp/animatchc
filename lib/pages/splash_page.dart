@@ -371,7 +371,7 @@ class _SplashPageState extends State<SplashPage>
                         child: Transform.scale(
                           scale: (0.5 + 0.5 * logoIn) * popScale,
                           child: _shine(Image.asset(
-                            'assets/images/logo.png',
+                            'assets/images/logo_clear.png',
                             width: size.width * 0.8,
                             fit: BoxFit.contain,
                           )),
