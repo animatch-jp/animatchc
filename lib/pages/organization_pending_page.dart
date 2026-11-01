@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'organization_home_page.dart';
@@ -59,7 +60,7 @@ class OrganizationPendingPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text('😢', style: TextStyle(fontSize: 60)),
+                        const Animaru(size: 120, mood: AnimaruMood.sad),
 
 
                         const SizedBox(height: 20),
@@ -93,7 +94,7 @@ class OrganizationPendingPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text('⏳', style: TextStyle(fontSize: 60)),
+                      const Animaru(size: 120, wave: true),
 
 
                       const SizedBox(height: 20),

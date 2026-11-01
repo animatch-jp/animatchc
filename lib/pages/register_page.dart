@@ -1,4 +1,5 @@
 import 'profile_setup_page.dart';
+import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,43 +24,88 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
   bool _isAgeConfirmed = false;
 
+  // あにまるのふきだしと気持ち（入力に合わせて変わる）
+  final _passFocus = FocusNode();
+  final _confirmFocus = FocusNode();
+  String _guideMsg = 'はじめまして、あにまるだよ！\nまずはアカウントを作ろう';
+  AnimaruMood _guideMood = AnimaruMood.normal;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailCtrl.addListener(_updateGuide);
+    _passFocus.addListener(_updateGuide);
+    _confirmFocus.addListener(_updateGuide);
+    _passCtrl.addListener(_updateGuide);
+    _confirmPassCtrl.addListener(_updateGuide);
+  }
+
+  void _say(String msg, AnimaruMood mood) {
+    if (msg == _guideMsg && mood == _guideMood) return;
+    setState(() {
+      _guideMsg = msg;
+      _guideMood = mood;
+    });
+  }
+
+  void _updateGuide() {
+    if (_passFocus.hasFocus || _confirmFocus.hasFocus) {
+      if (_confirmFocus.hasFocus &&
+          _confirmPassCtrl.text.isNotEmpty &&
+          _confirmPassCtrl.text == _passCtrl.text) {
+        _say('パスワード、ぴったり同じだよ！\n（見てないけどね）', AnimaruMood.shy);
+      } else {
+        _say('パスワードは見ないようにしてるよ…！\n6文字以上でね', AnimaruMood.shy);
+      }
+      return;
+    }
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      _say('はじめまして、あにまるだよ！\nまずはアカウントを作ろう', AnimaruMood.normal);
+    } else if (RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      _say('いいメールアドレス！\nつぎはパスワードを決めよう', AnimaruMood.happy);
+    } else {
+      _say('メールアドレスを入れてね。\n「@」も忘れずに', AnimaruMood.normal);
+    }
+  }
+
+  // うまくいかなかったとき：あにまるがしょんぼりして教えてくれる
+  void _oops(String msg) {
+    _say(msg, AnimaruMood.sad);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg.replaceAll('\n', '')), backgroundColor: Colors.red),
+    );
+  }
+
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _confirmPassCtrl.dispose();
+    _passFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
   void _register() async {
+    FocusScope.of(context).unfocus();
     if (_emailCtrl.text.isEmpty || _passCtrl.text.isEmpty || _confirmPassCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('全ての項目を入力してください'), backgroundColor: Colors.red),
-      );
+      _oops('まだ入っていないところがあるよ。\n全部入れてね');
       return;
     }
 
     if (_passCtrl.text != _confirmPassCtrl.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('パスワードが一致しません'), backgroundColor: Colors.red),
-      );
+      _oops('パスワードが2つで\nちがうみたい…');
       return;
     }
 
     if (_passCtrl.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('パスワードは6文字以上にしてください'), backgroundColor: Colors.red),
-      );
+      _oops('パスワードは\n6文字以上にしてね');
       return;
     }
 
     if (!_isAgeConfirmed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('利用規約とプライバシーポリシーへの同意が必要です'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _oops('利用規約とプライバシーポリシーに\n同意してね');
       return;
     }
 
@@ -84,11 +130,7 @@ class _RegisterPageState extends State<RegisterPage> {
       if (e.code == 'invalid-email') message = 'メールアドレスの形式が正しくありません';
       if (e.code == 'weak-password') message = 'パスワードが弱すぎます';
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) _oops(message);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -174,9 +216,10 @@ class _RegisterPageState extends State<RegisterPage> {
                   const Text('Find Your Wild Connection',
                       style: TextStyle(fontSize: 13, color: Colors.white70)),
                   const SizedBox(height: 18),
-                  const AnimaruGuide(
+                  AnimaruGuide(
                     step: 0,
-                    message: 'はじめまして、あにまるだよ！\nまずはアカウントを作ろう',
+                    message: _guideMsg,
+                    mood: _guideMood,
                   ),
                 ],
               ),
@@ -209,6 +252,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passCtrl,
+                    focusNode: _passFocus,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       labelText: 'パスワード（6文字以上）',
@@ -228,6 +272,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _confirmPassCtrl,
+                    focusNode: _confirmFocus,
                     obscureText: _obscureConfirm,
                     decoration: InputDecoration(
                       labelText: 'パスワード確認',
@@ -249,7 +294,12 @@ class _RegisterPageState extends State<RegisterPage> {
                     children: [
                       Checkbox(
                         value: _isAgeConfirmed,
-                        onChanged: (val) => setState(() => _isAgeConfirmed = val ?? false),
+                        onChanged: (val) {
+                          setState(() => _isAgeConfirmed = val ?? false);
+                          if (_isAgeConfirmed) {
+                            _say('ありがとう！\nあとは「登録する」を押すだけ', AnimaruMood.happy);
+                          }
+                        },
                         activeColor: const Color(0xFFE8845A),
                       ),
                       Expanded(

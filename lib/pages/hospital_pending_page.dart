@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'hospital_home_page.dart';
@@ -54,7 +55,7 @@ class HospitalPendingPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text('😢', style: TextStyle(fontSize: 60)),
+                      const Animaru(size: 120, mood: AnimaruMood.sad),
                       const SizedBox(height: 20),
                       const Text('申請は承認されませんでした',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -83,7 +84,7 @@ class HospitalPendingPage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text('⏳', style: TextStyle(fontSize: 60)),
+                    const Animaru(size: 120, wave: true),
                     const SizedBox(height: 20),
                     const Text('審査中です', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 12),

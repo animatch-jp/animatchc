@@ -4,13 +4,22 @@ import 'animaru.dart';
 
 /// 登録の画面の上に出す、あにまるの案内（ふきだし）と、いまどこまで進んだかの目印
 class AnimaruGuide extends StatelessWidget {
-  const AnimaruGuide({super.key, required this.message, required this.step});
+  const AnimaruGuide({
+    super.key,
+    required this.message,
+    required this.step,
+    this.mood = AnimaruMood.normal,
+    this.labels = userSteps,
+  });
 
   final String message;
-  // 0:アカウント 1:きほん 2:じこしょうかい 3:うちの子
-  final int step;
+  final AnimaruMood mood;
+  // いまの段階（labels の何番目か）。null なら、進み具合は出さない
+  final int? step;
+  final List<String> labels;
 
-  static const _labels = ['アカウント', 'きほん', 'じこしょうかい', 'うちの子'];
+  static const userSteps = ['アカウント', 'きほん', 'じこしょうかい', 'うちの子'];
+  static const orgSteps = ['申請', '運営が確認', '使えるように'];
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +38,12 @@ class AnimaruGuide extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Animaru(size: 72, wave: true),
+              child: Animaru(size: 72, wave: mood == AnimaruMood.normal, mood: mood),
             ),
             const SizedBox(width: 6),
             Expanded(
               child: TweenAnimationBuilder<double>(
-                key: ValueKey(message),
+                key: ValueKey('$message$mood'),
                 tween: Tween(begin: 0, end: 1),
                 duration: const Duration(milliseconds: 450),
                 curve: Curves.easeOutBack,
@@ -69,14 +78,15 @@ class AnimaruGuide extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        if (step != null) const SizedBox(height: 10),
+        if (step != null)
         Row(
-          children: List.generate(_labels.length, (i) {
-            final done = i < step;
+          children: List.generate(labels.length, (i) {
+            final done = i < step!;
             final now = i == step;
             return Expanded(
               child: Padding(
-                padding: EdgeInsets.only(right: i == _labels.length - 1 ? 0 : 6),
+                padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -95,7 +105,7 @@ class AnimaruGuide extends StatelessWidget {
                           const Icon(Icons.pets, size: 11, color: Colors.white),
                         if (done) const SizedBox(width: 2),
                         Flexible(
-                          child: Text(_labels[i],
+                          child: Text(labels[i],
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                   fontSize: 10.5,

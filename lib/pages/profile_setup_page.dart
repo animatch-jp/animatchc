@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -18,6 +19,33 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _nameCtrl = TextEditingController();
   DateTime? _birthDate;
   final List<String> _selectedAnimals = [];
+
+  // あにまるのふきだしと気持ち
+  String _guideMsg = 'きみのことを教えてね。\n写真とニックネームから！';
+  AnimaruMood _guideMood = AnimaruMood.normal;
+  bool _nameListening = false;
+
+  void _say(String msg, AnimaruMood mood) {
+    if (!mounted || (msg == _guideMsg && mood == _guideMood)) return;
+    setState(() {
+      _guideMsg = msg;
+      _guideMood = mood;
+    });
+  }
+
+  void _onName() {
+    final n = _nameCtrl.text.trim();
+    if (n.isEmpty) return;
+    final short = n.length > 8 ? '${n.substring(0, 8)}…' : n;
+    _say('$shortさん、よろしくね！', AnimaruMood.happy);
+  }
+
+  void _oops(String msg) {
+    _say(msg, AnimaruMood.sad);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
+  }
   String? _selectedGender;
   String? _selectedPrefecture;
   File? _profileImage;
@@ -48,6 +76,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   @override
   void dispose() {
+    _nameCtrl.removeListener(_onName);
     _nameCtrl.dispose();
     super.dispose();
   }
@@ -67,64 +96,39 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   Future<void> _next() async {
     if (_nameCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ニックネームを入力してください'),
-            backgroundColor: Colors.red),
-      );
+      _oops('ニックネームを入力してください');
       return;
     }
     final nameError = await NameRules.check(_nameCtrl.text);
     if (!mounted) return;
     if (nameError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(nameError), backgroundColor: Colors.red),
-      );
+      _oops(nameError);
       return;
     }
     if (_birthDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('生年月日を選択してください'),
-            backgroundColor: Colors.red),
-      );
+      _oops('生年月日を選択してください');
       return;
     }
     if (_selectedPrefecture == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('都道府県を選択してください'),
-            backgroundColor: Colors.red),
-      );
+      _oops('都道府県を選択してください');
       return;
     }
     if (_selectedAnimals.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('好きな動物を選択してください'),
-            backgroundColor: Colors.red),
-      );
+      _oops('好きな動物を選択してください');
       return;
     }
     if (_profileImageUrl == null || _profileImageUrl!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('プロフィール画像を設定してください'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _oops('プロフィール画像を設定してください');
       return;
     }
 
     final age = AgeUtils.calculate(_birthDate!);
     if (age < 13) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('AniMatchは13歳以上の方が対象です'),
-            backgroundColor: Colors.red),
-      );
+      _oops('AniMatchは13歳以上の方が対象です');
       return;
     }
     if (age > 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('正しい生年月日を選択してください'),
-            backgroundColor: Colors.red),
-      );
+      _oops('正しい生年月日を選択してください');
       return;
     }
 
@@ -161,17 +165,18 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   end: Alignment.bottomRight,
                 ),
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('プロフィール設定',
+                  const Text('プロフィール設定',
                       style: TextStyle(fontSize: 28,
                           fontWeight: FontWeight.w900,
                           color: Colors.white)),
-                  SizedBox(height: 14),
+                  const SizedBox(height: 14),
                   AnimaruGuide(
                     step: 1,
-                    message: 'きみのことを教えてね。\n写真とニックネームから！',
+                    message: _guideMsg,
+                    mood: _guideMood,
                   ),
                 ],
               ),
@@ -190,6 +195,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                         final url = await CloudinaryService.pickAndUploadImage();
                         setState(() {
                           _profileImageUrl = url;
+                          _guideMsg = 'すてきな写真！\nつぎはニックネームだよ';
+                          _guideMood = AnimaruMood.happy;
                           _isUploadingImage = false;
                         });
                         if (url == null && mounted) {
@@ -244,6 +251,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _nameCtrl,
+                    onTap: () {
+                      if (!_nameListening) {
+                        _nameListening = true;
+                        _nameCtrl.addListener(_onName);
+                      }
+                    },
                     decoration: InputDecoration(
                       hintText: 'ニックネームを入力',
                       prefixIcon: const Icon(Icons.person_outline,
@@ -332,6 +345,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                             _selectedAnimals.remove(animal['name']);
                           } else {
                             _selectedAnimals.add(animal['name']!);
+                            _guideMsg = '${animal['name']}が好きなんだね！\nあにまるも好き！';
+                            _guideMood = AnimaruMood.happy;
                           }
                         }),
                         child: Container(

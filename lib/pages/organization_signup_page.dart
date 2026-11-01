@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'prefectures.dart';
@@ -164,6 +165,19 @@ _submit();
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+Container(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFE8845A), Color(0xFFF4A261)]),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const AnimaruGuide(
+                step: 0,
+                labels: AnimaruGuide.orgSteps,
+                message: '団体・保護主のみなさん、ようこそ！\\n運営が確認したら使えるようになるよ',
+              ),
+            ),
+            const SizedBox(height: 16),
             Text('申請内容を確認の上、運営が承認します',
                 style: TextStyle(fontSize: 13, color: Colors.grey[600])),
             const SizedBox(height: 24),

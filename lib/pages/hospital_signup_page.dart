@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'prefectures.dart';
@@ -184,6 +185,19 @@ Widget build(BuildContext context) {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF4DA8DA), Color(0xFF7CC4E8)]),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const AnimaruGuide(
+              step: 0,
+              labels: AnimaruGuide.orgSteps,
+              message: '病院・獣医師のみなさん、ようこそ！\\n運営が確認したら使えるようになるよ',
+            ),
+          ),
+          const SizedBox(height: 16),
           Text('申請内容を確認の上、運営が承認します', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
           const SizedBox(height: 24),
           Center(
