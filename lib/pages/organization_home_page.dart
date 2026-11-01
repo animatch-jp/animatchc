@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../services/content_filter.dart';
+import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -824,6 +826,7 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
   }
 
   Future<void> _submit() async {
+    if (ContentFilter.blocked(context, [_petNameCtrl.text, _personalityCtrl.text, _backgroundCtrl.text, _conditionsCtrl.text], allowContact: true)) return;
     if (_imageUrl == null ||
         _petNameCtrl.text.trim().isEmpty ||
         _typeCtrl.text.trim().isEmpty) {
@@ -1030,6 +1033,7 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
   }
 
   Future<void> _submit() async {
+    if (ContentFilter.blocked(context, [_titleCtrl.text, _descriptionCtrl.text], allowContact: true)) return;
     if (_titleCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('タイトルは必須です')),

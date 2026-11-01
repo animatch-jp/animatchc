@@ -1,4 +1,5 @@
 import 'pet_detail_page.dart';
+import '../services/content_filter.dart';
 import 'edit_profile_page.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -312,6 +313,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     onPressed: () async {
                       final user = FirebaseAuth.instance.currentUser;
                       if (user == null) return;
+                      if (ContentFilter.blocked(context, [nameCtrl.text, bioCtrl.text])) return;
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(user.uid)
@@ -1153,6 +1155,7 @@ class _AddPetSheetState extends State<_AddPetSheet> {
             child: ElevatedButton(
               onPressed: () async {
                 if (_nameCtrl.text.isEmpty) return;
+                if (ContentFilter.blocked(context, [_nameCtrl.text, _bioCtrl.text])) return;
                 final user = FirebaseAuth.instance.currentUser;
                 if (user == null) return;
                 final petData = {

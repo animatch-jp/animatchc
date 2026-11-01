@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
@@ -289,6 +290,7 @@ class _PostQuestionSheetState extends State<_PostQuestionSheet> {
   }
 
   Future<void> _submit() async {
+    if (ContentFilter.blocked(context, [_titleCtrl.text, _bodyCtrl.text])) return;
     if (_titleCtrl.text.trim().isEmpty || _bodyCtrl.text.trim().isEmpty || _selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('タイトル・内容・カテゴリを入力してください'), backgroundColor: Colors.red),
@@ -691,6 +693,7 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
   Future<void> _sendAnswer() async {
     final text = _answerCtrl.text.trim();
     if (text.isEmpty || text.length > _answerMaxLength) return;
+    if (ContentFilter.blocked(context, [text])) return;
 
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;

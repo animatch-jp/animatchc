@@ -1,4 +1,5 @@
 import '../services/cloudinary_service.dart';
+import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -702,6 +703,8 @@ class _EventPageState extends State<EventPage> {
   }) async {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return 'ログインし直してください';
+    final ng = ContentFilter.check([title, description, location], allowContact: true);
+    if (ng != null) return ng;
     if (maxParticipants != null && maxParticipants < 1) {
       return '参加人数の上限は1人以上にしてください';
     }
@@ -771,6 +774,8 @@ class _EventPageState extends State<EventPage> {
   }) async {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return 'ログインし直してください';
+    final ng = ContentFilter.check([title, description, location], allowContact: true);
+    if (ng != null) return ng;
 
     final currentCount = event['participantCount'] as int? ?? 0;
     if (maxParticipants != null) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
@@ -227,6 +228,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _save() async {
+    if (ContentFilter.blocked(context, [_nameCtrl.text, _bioCtrl.text, _mottoCtrl.text])) return;
     if (_nameCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

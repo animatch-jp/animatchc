@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/content_filter.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -72,6 +73,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
   }
 
   void _saveProfile() async {
+    if (ContentFilter.blocked(context, [_bioCtrl.text, _mottoCtrl.text])) return;
     if (_selectedRelation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

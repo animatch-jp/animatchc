@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -192,6 +193,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _sendMessage(String text) async {
     final body = text.trim();
     if (body.isEmpty) return;
+    if (ContentFilter.blocked(context, [body], allowContact: true)) return;
     if (_isBlocked || _isBlockedBy || _isSending) return;
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;

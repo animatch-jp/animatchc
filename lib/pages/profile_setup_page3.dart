@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/content_filter.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
 import 'welcome_page.dart';
@@ -73,6 +74,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
   }
 
   Future<void> _saveAndStart() async {
+    if (ContentFilter.blocked(context, [for (final p in _pets) ...[p.name, p.bio]])) return;
     setState(() => _isLoading = true);
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;

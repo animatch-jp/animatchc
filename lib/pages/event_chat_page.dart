@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -160,6 +161,7 @@ class _EventChatPageState extends State<EventChatPage> {
   void _sendMessage(String text) async {
     text = text.trim();
     if (text.isEmpty || text.length > _messageMaxLength) return;
+    if (ContentFilter.blocked(context, [text])) return;
     _msgCtrl.clear();
     await _send({'text': text});
   }

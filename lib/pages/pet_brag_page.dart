@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1044,6 +1045,7 @@ class _CommentInputBarState extends State<_CommentInputBar> {
   Future<void> _sendComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
+    if (ContentFilter.blocked(context, [text])) return;
     if (text.length > _commentMaxLength) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('コメントは$_commentMaxLength文字までです')));
@@ -1659,6 +1661,7 @@ class _PostBragSheetState extends State<_PostBragSheet> {
   }
 
   Future<void> _submit() async {
+    if (ContentFilter.blocked(context, [_petNameCtrl.text, _commentCtrl.text])) return;
     if (_imageUrl == null || _petNameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('写真とペットの名前を入力してください')),
@@ -1983,6 +1986,7 @@ class _PostMonthlyBragSheetState extends State<_PostMonthlyBragSheet> {
   }
 
   Future<void> _submit() async {
+    if (ContentFilter.blocked(context, [_petNameCtrl.text, _commentCtrl.text])) return;
     if (_imageUrl == null || _petNameCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('写真とペットの名前を入力してください')),

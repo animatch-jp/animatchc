@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
@@ -553,6 +554,7 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
   }
 
   Future<void> _submit() async {
+    if (ContentFilter.blocked(context, [_petNameCtrl.text, _descriptionCtrl.text, _locationCtrl.text], allowContact: true)) return;
     if (_petNameCtrl.text.trim().isEmpty || _locationCtrl.text.trim().isEmpty || _selectedArea == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('ペットの名前・特徴・場所・都道府県は必須です')),
