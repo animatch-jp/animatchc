@@ -30,20 +30,43 @@ class _BlockListPageState extends State<BlockListPage> {
         .collection('blocked')
         .get();
 
-    final users = <Map<String, dynamic>>[];
-    for (final doc in snapshot.docs) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(doc.id)
-          .get();
-      if (userDoc.exists) {
-        users.add({
-          'uid': doc.id,
-          'name': userDoc.data()?['name'] ?? '',
-          'profileImageUrl': userDoc.data()?['profileImageUrl'] ?? '',
-        });
-      }
+    // ブロックした相手は、利用者・団体・動物病院のどれか。順に探して、名前を出す
+    final db = FirebaseFirestore.instance;
+    Future<Map<String, dynamic>> find(String id) async {
+      try {
+        final u = await db.collection('users').doc(id).get();
+        if (u.exists) {
+          return {
+            'uid': id,
+            'name': u.data()?['name'] ?? '',
+            'profileImageUrl': u.data()?['profileImageUrl'] ?? '',
+            'kind': '',
+          };
+        }
+        final o = await db.collection('organizations').doc(id).get();
+        if (o.exists) {
+          return {
+            'uid': id,
+            'name': o.data()?['name'] ?? '',
+            'profileImageUrl': o.data()?['imageUrl'] ?? '',
+            'kind': '団体',
+          };
+        }
+        final h = await db.collection('hospitals').doc(id).get();
+        if (h.exists) {
+          return {
+            'uid': id,
+            'name': h.data()?['name'] ?? '',
+            'profileImageUrl': h.data()?['imageUrl'] ?? '',
+            'kind': '動物病院',
+          };
+        }
+      } catch (_) {}
+      // 退会したなどで見つからなくても、解除はできるように残す
+      return {'uid': id, 'name': '（見つからないアカウント）', 'profileImageUrl': '', 'kind': ''};
     }
+
+    final users = await Future.wait(snapshot.docs.map((d) => find(d.id)));
 
     if (mounted) {
       setState(() {
@@ -139,8 +162,7 @@ class _BlockListPageState extends State<BlockListPage> {
         itemBuilder: (_, i) {
           final user = _blockedUsers[i];
           return ListTile(
-            leading: user['profileImageUrl'] != null &&
-                (user['profileImageUrl'] as String).isNotEmpty
+            leading: (user['profileImageUrl'] as String? ?? '').isNotEmpty
                 ? ClipOval(
               child: Image.network(
                 user['profileImageUrl'],
@@ -163,6 +185,10 @@ class _BlockListPageState extends State<BlockListPage> {
             title: Text(user['name'],
                 style: const TextStyle(
                     fontWeight: FontWeight.bold)),
+            subtitle: (user['kind'] as String? ?? '').isEmpty
+                ? null
+                : Text(user['kind'] as String,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             trailing: TextButton(
               onPressed: () => _unblock(user['uid']),
               child: const Text('解除',
