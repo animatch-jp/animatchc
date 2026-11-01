@@ -312,24 +312,7 @@ class _ChatPageState extends State<ChatPage> {
     }, SetOptions(merge: true));
   }
 
-  void _sendLocation() {
-    if (_isBlocked || _isBlockedBy) return;
-    final myUid = FirebaseAuth.instance.currentUser?.uid;
-    if (myUid == null) return;
-    _chatRef.collection('messages').add({
-      'text': '📍 現在地を共有しました',
-      'senderId': myUid,
-      'createdAt': FieldValue.serverTimestamp(),
-      'read': false,
-      'type': 'location',
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('位置情報を共有しました📍'),
-        backgroundColor: Color(0xFF2D6A4F),
-      ),
-    );
-  }
+
 
   Future<void> _setStatus(String status) async {
     await _chatRef.set({'status': status}, SetOptions(merge: true));
