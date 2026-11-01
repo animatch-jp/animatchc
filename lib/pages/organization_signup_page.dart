@@ -174,7 +174,7 @@ Container(
               child: const AnimaruGuide(
                 step: 0,
                 labels: AnimaruGuide.orgSteps,
-                message: '団体・保護主のみなさん、ようこそ！\\n運営が確認したら使えるようになるよ',
+                message: '団体・保護主のみなさん、ようこそ！\n運営が確認したら使えるようになるよ',
               ),
             ),
             const SizedBox(height: 16),

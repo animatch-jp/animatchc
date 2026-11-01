@@ -194,7 +194,7 @@ Container(
             child: const AnimaruGuide(
               step: 0,
               labels: AnimaruGuide.orgSteps,
-              message: '病院・獣医師のみなさん、ようこそ！\\n運営が確認したら使えるようになるよ',
+              message: '病院・獣医師のみなさん、ようこそ！\n運営が確認したら使えるようになるよ',
             ),
           ),
           const SizedBox(height: 16),
