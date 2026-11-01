@@ -11,6 +11,7 @@ import 'hospital_tags.dart';
 import 'notification_prefs.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'ranking_page.dart';
+import '../widgets/badge_celebration.dart';
 import 'report_page.dart';
 import '../services/blocked_users.dart';
 
@@ -1695,6 +1696,8 @@ class _PostBragSheetState extends State<_PostBragSheet> {
   }
 
   Future<void> _checkAndAwardBadges(String uid) async {
+    // 投稿のシートが閉じても、お祝いを出せるように、いちばん外の画面を先に覚えておく
+    final rootNav = Navigator.of(context, rootNavigator: true);
     final snapshot = await FirebaseFirestore.instance
         .collection('petBrags')
         .where('uid', isEqualTo: uid)
@@ -1727,6 +1730,11 @@ class _PostBragSheetState extends State<_PostBragSheet> {
       await userRef.update({
         'badges': FieldValue.arrayUnion(toAdd),
       });
+      for (final badge in toAdd) {
+        if (!rootNav.mounted) break;
+        await showBadgeCelebration(rootNav.context, badge,
+            emoji: badge == '発見マスター' ? '🔍' : '🏅');
+      }
 
       for (final badge in toAdd) {
         if (!await shouldSendNotification(uid, 'ランキング・バッジ')) continue;
