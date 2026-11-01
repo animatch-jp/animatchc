@@ -251,7 +251,7 @@ class _SplashPageState extends State<SplashPage>
         children: List.generate(2, (i) {
           final t = (_loop.value + i * 0.5) % 1.0;
           return Opacity(
-            opacity: (1 - t) * 0.18 * show,
+            opacity: (1 - t) * 0.3 * show,
             child: Container(
               width: size * (0.5 + t * 0.7),
               height: size * (0.5 + t * 0.7),
@@ -299,9 +299,20 @@ class _SplashPageState extends State<SplashPage>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Transform.translate(
-          offset: Offset(0, -4 * hop.abs()),
-          child: const Icon(Icons.touch_app_rounded, color: _orange, size: 30),
+        // 指のまわりだけ、小さな輪がひろがる
+        SizedBox(
+          width: 90,
+          height: 90,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              _ripples(70),
+              Transform.translate(
+                offset: Offset(0, -4 * hop.abs()),
+                child: const Icon(Icons.touch_app_rounded, color: _orange, size: 30),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 6),
         Opacity(
@@ -360,7 +371,6 @@ class _SplashPageState extends State<SplashPage>
             child: Stack(
             children: [
               Positioned.fill(child: _footsteps(size.width)),
-              Center(child: _ripples(size.width * 0.9)),
               Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
