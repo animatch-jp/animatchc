@@ -68,6 +68,9 @@ class UnreadService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _seenSub;
   final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
   _msgSubs = {};
+  // イベントそのもの（消された・終わったを見張る）
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _eventSubs = {};
 
   final Map<String, bool> _orgCache = {};
   final Map<String, Map<String, String>> _eventMeta = {};
@@ -118,6 +121,10 @@ class UnreadService {
       s.cancel();
     }
     _msgSubs.clear();
+    for (final s in _eventSubs.values) {
+      s.cancel();
+    }
+    _eventSubs.clear();
     _msgs.clear();
     _eventMeta.clear();
     _lastSeen = {};
@@ -216,6 +223,8 @@ class UnreadService {
       final eventsSnap =
       await FirebaseFirestore.instance.collection('events').get();
       final flags = await Future.wait(eventsSnap.docs.map((d) async {
+        // 終わったイベントのチャットは、一覧に出さない（イベントの一覧と同じ）
+        if (!_isOpenFor(d.data(), uid)) return false;
         if (d.data()['organizerUid'] == uid) return true;
         final p = await d.reference.collection('participants').doc(uid).get();
         return p.exists;
@@ -239,6 +248,7 @@ class UnreadService {
       for (final id in _msgSubs.keys.toList()) {
         if (!joined.contains(id)) {
           _msgSubs.remove(id)?.cancel();
+          _eventSubs.remove(id)?.cancel();
           _msgs.remove(id);
         }
       }
@@ -254,7 +264,50 @@ class UnreadService {
     }
   }
 
+  /// そのイベントが、この人のイベント一覧にまだ出ているか。
+  /// 企画した人には、終わっても出る（終了日を延ばせるように）。ほかの人には、終了日を過ぎたら出ない。
+  static bool _isOpenFor(Map<String, dynamic>? data, String uid) {
+    if (data == null) return false;
+    if (data['organizerUid'] == uid) return true;
+    final end = data['endDate'];
+    if (end is! Timestamp) return true;
+    return end.toDate().isAfter(DateTime.now());
+  }
+
+  /// グループの一覧から、1つのイベントのチャットを外す
+  void _dropGroup(String eventId) {
+    _msgSubs.remove(eventId)?.cancel();
+    _eventSubs.remove(eventId)?.cancel();
+    _msgs.remove(eventId);
+    _eventMeta.remove(eventId);
+    _recomputeGroups();
+  }
+
   void _listenMessages(String eventId, int epoch) {
+    // イベントが消された・終わったら、すぐに一覧から外す。名前が変わったら、一覧の名前も変える
+    _eventSubs[eventId] = FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .snapshots()
+        .listen((doc) {
+      if (epoch != _epoch) return;
+      final uid = _uid;
+      if (uid == null) return;
+      final data = doc.data();
+      if (!doc.exists || !_isOpenFor(data, uid)) {
+        _dropGroup(eventId);
+        return;
+      }
+      if (_eventMeta.containsKey(eventId)) {
+        _eventMeta[eventId] = {
+          'title': (data!['title'] as String?) ?? '',
+          'emoji': (data['emoji'] as String?) ?? '🐾',
+        };
+        _recomputeGroups();
+      }
+    }, onError: (_) {
+      if (epoch == _epoch) _dropGroup(eventId);
+    });
     _msgSubs[eventId] = FirebaseFirestore.instance
         .collection('events')
         .doc(eventId)
@@ -277,10 +330,7 @@ class UnreadService {
       _recomputeGroups();
     }, onError: (_) {
       // 追放された・イベントが消えたなど。一覧から外す
-      _msgSubs.remove(eventId)?.cancel();
-      _msgs.remove(eventId);
-      _eventMeta.remove(eventId);
-      _recomputeGroups();
+      if (epoch == _epoch) _dropGroup(eventId);
     });
   }
 
