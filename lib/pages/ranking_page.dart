@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/blocked_users.dart';
+import '../widgets/animaru.dart';
 import 'pet_brag_page.dart' show showPostDetail;
 
 // 週間ランキング
@@ -484,12 +485,7 @@ class _WeeklyRankingViewState extends State<WeeklyRankingView>
       padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
       child: Column(
         children: [
-          AnimatedBuilder(
-            animation: _bob,
-            builder: (_, child) => Transform.translate(
-                offset: Offset(0, -6 * _bob.value), child: child),
-            child: Text(g.emoji, style: const TextStyle(fontSize: 48)),
-          ),
+          const Animaru(size: 110),
           const SizedBox(height: 12),
           Text(
             g.types == null

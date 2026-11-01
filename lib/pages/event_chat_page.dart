@@ -7,6 +7,7 @@ import 'notification_prefs.dart';
 import 'report_page.dart';
 import '../services/cloudinary_service.dart';
 import '../services/blocked_users.dart';
+import '../widgets/animaru.dart';
 
 // グループチャットの1メッセージの文字数の上限
 const int _messageMaxLength = 1000;
@@ -551,7 +552,7 @@ class _EventChatPageState extends State<EventChatPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('💬', style: TextStyle(fontSize: 48)),
+                        Animaru(size: 100, wave: true),
                         SizedBox(height: 16),
                         Text('まだメッセージがありません',
                             style: TextStyle(

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../widgets/animaru.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_page.dart';
@@ -364,6 +365,15 @@ class _SplashPageState extends State<SplashPage>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // アニマルが、ロゴのあとに、ぴょこっと出てきて手をふる
+                    Opacity(
+                      opacity: _part(0.6, 0.75),
+                      child: Transform.translate(
+                        offset: Offset(0, 30 * (1 - _part(0.6, 0.9, curve: Curves.elasticOut))),
+                        child: const Animaru(size: 110, wave: true),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Opacity(
                       opacity: logoFade,
                       child: Transform.rotate(
