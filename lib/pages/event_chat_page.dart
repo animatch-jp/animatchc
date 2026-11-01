@@ -368,6 +368,177 @@ class _EventChatPageState extends State<EventChatPage> {
     );
   }
 
+  // 投票を作る（日にち決めなど）。だれでも作れる
+  Future<void> _createPoll() async {
+    final qCtrl = TextEditingController(text: 'いつがいい？');
+    final optCtrls = List.generate(4, (_) => TextEditingController());
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('投票を作る'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: qCtrl,
+                maxLength: 60,
+                decoration: const InputDecoration(labelText: 'しつもん', counterText: ''),
+              ),
+              const SizedBox(height: 8),
+              for (var i = 0; i < 4; i++)
+                TextField(
+                  controller: optCtrls[i],
+                  maxLength: 30,
+                  decoration: InputDecoration(
+                    labelText: i < 2 ? 'えらぶもの ${i + 1}' : 'えらぶもの ${i + 1}（なくてもOK）',
+                    hintText: i == 0 ? '例：11月23日（土）' : null,
+                    counterText: '',
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: const Text('やめる')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: _orange, foregroundColor: Colors.white),
+            child: const Text('みんなに出す'),
+          ),
+        ],
+      ),
+    );
+    final q = qCtrl.text.trim();
+    final opts = optCtrls.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList();
+    qCtrl.dispose();
+    for (final c in optCtrls) {
+      c.dispose();
+    }
+    if (ok != true || !mounted) return;
+    if (q.isEmpty || opts.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('しつもんと、えらぶものを2つ以上入れてね')));
+      return;
+    }
+    if (ContentFilter.blocked(context, [q, ...opts])) return;
+    await _send({'type': 'poll', 'question': q, 'options': opts, 'text': '🗳 投票：$q'});
+  }
+
+  // 投票する（1人1つ。同じものをもう一度押すと、取り消し）
+  Future<void> _votePoll(String messageId, int choice, int count, Map<String, dynamic> reactions) async {
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me == null) return;
+    final mine = ((reactions['opt$choice'] as List?) ?? const []).contains(me);
+    final update = <Object, Object>{};
+    for (var i = 0; i < count; i++) {
+      update[FieldPath(['reactions', 'opt$i'])] =
+          (i == choice && !mine) ? FieldValue.arrayUnion([me]) : FieldValue.arrayRemove([me]);
+    }
+    try {
+      await _messagesRef.doc(messageId).update(update);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('投票できませんでした')));
+      }
+    }
+  }
+
+  Widget _pollView(String messageId, Map<String, dynamic> data, Map<String, dynamic> reactions) {
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    final opts = List<String>.from(data['options'] ?? const []);
+    final counts = [
+      for (var i = 0; i < opts.length; i++) ((reactions['opt$i'] as List?) ?? const []).length
+    ];
+    final total = counts.fold<int>(0, (a, b) => a + b);
+    final best = counts.isEmpty ? 0 : counts.reduce((a, b) => a > b ? a : b);
+    return Container(
+      width: MediaQuery.of(context).size.width * 0.7,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF6D5C6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('🗳', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(data['question'] as String? ?? '',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: _brown)),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          for (var i = 0; i < opts.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _votePoll(messageId, i, opts.length, reactions),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: ((reactions['opt$i'] as List?) ?? const []).contains(me)
+                            ? _orange
+                            : const Color(0xFFEDE3DD)),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: total == 0 ? 0 : counts[i] / total),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutCubic,
+                          builder: (_, v, __) => FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: v,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: counts[i] == best && best > 0
+                                    ? const Color(0xFFFFE2D3)
+                                    : const Color(0xFFF7EFEA),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Row(
+                          children: [
+                            if (((reactions['opt$i'] as List?) ?? const []).contains(me))
+                              const Padding(
+                                padding: EdgeInsets.only(right: 4),
+                                child: Icon(Icons.pets, size: 14, color: _orange),
+                              ),
+                            Expanded(
+                              child: Text(opts[i],
+                                  style: const TextStyle(fontSize: 13, color: _brown)),
+                            ),
+                            Text('${counts[i]}票',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.bold, color: _orange)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          Text('押して投票。もう一度押すと取り消し', style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+        ],
+      ),
+    );
+  }
+
   // スタンプ：吹き出しなしで、大きく、ぽんっと出る
   Widget _stampView(Map<String, dynamic> data) {
     final text = data['text'] as String? ?? '';
@@ -534,6 +705,24 @@ class _EventChatPageState extends State<EventChatPage> {
                 style: TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: '日にちなどの投票を作る',
+            onPressed: _createPoll,
+            icon: const Icon(Icons.how_to_vote_outlined, color: _brown),
+          ),
+          IconButton(
+            tooltip: '思い出アルバム',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => _EventAlbumPage(
+                    messagesRef: _messagesRef, eventTitle: widget.eventTitle),
+              ),
+            ),
+            icon: const Icon(Icons.photo_library_outlined, color: _brown),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -682,7 +871,9 @@ class _EventChatPageState extends State<EventChatPage> {
                                           text: data['text'] as String? ?? '',
                                           reactions: reactions,
                                         ),
-                                child: type == 'stamp'
+                                child: type == 'poll'
+                                    ? _pollView(messageId, data, reactions)
+                                    : type == 'stamp'
                                     ? _stampView(data)
                                     : type == 'image' && (data['imageUrl'] as String? ?? '').isNotEmpty
                                         ? _imageView(data['imageUrl'] as String)
@@ -927,6 +1118,103 @@ class _EventInfoBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis),
         ),
       ],
+    );
+  }
+}
+
+
+// 思い出アルバム：このイベントのチャットに送られた写真を、まとめて見られる
+class _EventAlbumPage extends StatelessWidget {
+  const _EventAlbumPage({required this.messagesRef, required this.eventTitle});
+  final CollectionReference<Map<String, dynamic>> messagesRef;
+  final String eventTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF8F5),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        foregroundColor: _brown,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('思い出アルバム', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            Text(eventTitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: messagesRef.orderBy('createdAt', descending: true).snapshots(),
+        builder: (context, snap) {
+          if (!snap.hasData) return const AnimaruLoading();
+          final photos = snap.data!.docs
+              .where((d) =>
+                  d.data()['type'] == 'image' &&
+                  (d.data()['imageUrl'] as String? ?? '').isNotEmpty &&
+                  !BlockedUsers.instance.isBlocked(d.data()['senderUid']))
+              .toList();
+          if (photos.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Animaru(size: 100, showName: true),
+                    const SizedBox(height: 12),
+                    const Text('まだ写真がありません',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: _brown)),
+                    const SizedBox(height: 6),
+                    Text('チャットの📷から写真を送ると、ここにたまっていきます',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  ],
+                ),
+              ),
+            );
+          }
+          return GridView.builder(
+            padding: const EdgeInsets.all(8),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3, mainAxisSpacing: 6, crossAxisSpacing: 6),
+            itemCount: photos.length,
+            itemBuilder: (context, i) {
+              final d = photos[i].data();
+              final url = d['imageUrl'] as String;
+              return TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.85, end: 1),
+                duration: Duration(milliseconds: 300 + (i % 9) * 40),
+                curve: Curves.easeOutBack,
+                builder: (_, v, child) => Transform.scale(scale: v, child: child),
+                child: GestureDetector(
+                  onTap: () => showDialog(
+                    context: context,
+                    builder: (_) => GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          InteractiveViewer(child: Image.network(url)),
+                          const SizedBox(height: 8),
+                          Text('${d['senderName'] ?? ''} さん',
+                              style: const TextStyle(color: Colors.white, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(url, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: Colors.grey[200])),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
