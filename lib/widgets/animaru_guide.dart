@@ -20,7 +20,17 @@ class AnimaruGuide extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            const Animaru(size: 78, wave: true),
+            // オレンジの背景でも見えるように、白い丸の上に立たせる
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.92),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Animaru(size: 72, wave: true),
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: TweenAnimationBuilder<double>(
