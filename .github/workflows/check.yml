@@ -65,6 +65,19 @@ jobs:
           fi
           exit $code
 
+      # GitHubのページは10分間ブラウザに残るので、直しても古い版が出ることがある。
+      # ファイルに版の番号（?v=コミット番号）をつけて、古いページは新しい版へ自動で移るようにする
+      - name: 古い版が出ないように、版の番号をつける
+        shell: bash
+        run: |
+          V="${GITHUB_SHA::7}"
+          python3 .github/scripts/add_version.py build/web "$V"
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            LINK="https://animatch-jp.github.io/animatchc/?v=${V}"
+            echo "::notice title=テスト用のリンク::${LINK}"
+            echo "テスト用のリンク（この版）: ${LINK}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: 組み立てたWeb版を保存する
         uses: actions/upload-artifact@v4
         with:
