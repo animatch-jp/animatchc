@@ -314,6 +314,38 @@ class _VolunteerInterestSectionState extends State<_VolunteerInterestSection> {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     final isOwner = myUid != null && myUid == widget.orgId;
 
+    // 団体以外の人は、自分が押したかどうかだけを見る
+    // （だれが押したかは、その団体だけが見られる。データを守るルールでも止めている）
+    if (!isOwner) {
+      if (myUid == null) return const SizedBox.shrink();
+      return StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('volunteers')
+            .doc(widget.volunteerId)
+            .collection('interested')
+            .doc(myUid)
+            .snapshots(),
+        builder: (context, snapshot) {
+          final amInterested = snapshot.data?.exists ?? false;
+          return SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isSending ? null : () => _toggleInterest(amInterested),
+              icon: _isSending
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE8845A)))
+                  : Icon(amInterested ? Icons.favorite : Icons.favorite_border, color: const Color(0xFFE8845A)),
+              label: Text(amInterested ? '興味あります済み（押すと取り消し）' : '興味あります'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFE8845A),
+                side: const BorderSide(color: Color(0xFFE8845A)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('volunteers')
@@ -324,9 +356,8 @@ class _VolunteerInterestSectionState extends State<_VolunteerInterestSection> {
       builder: (context, snapshot) {
         final docs = snapshot.data?.docs ?? [];
         final count = docs.length;
-        final amInterested = myUid != null && docs.any((d) => d.id == myUid);
 
-        if (isOwner) {
+        {
           return Container(
             margin: const EdgeInsets.only(top: 16),
             padding: const EdgeInsets.all(14),
@@ -373,22 +404,6 @@ class _VolunteerInterestSectionState extends State<_VolunteerInterestSection> {
             ),
           );
         }
-
-        return SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _isSending ? null : () => _toggleInterest(amInterested),
-            icon: _isSending
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE8845A)))
-                : Icon(amInterested ? Icons.favorite : Icons.favorite_border, color: const Color(0xFFE8845A)),
-            label: Text(amInterested ? '興味あります済み（$count人）' : '興味あります（$count人）'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFE8845A),
-              side: const BorderSide(color: Color(0xFFE8845A)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-          ),
-        );
       },
     );
   }

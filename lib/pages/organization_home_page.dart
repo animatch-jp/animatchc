@@ -1,7 +1,6 @@
 import 'dart:async';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
-import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +10,8 @@ import 'organization_chat_list_page.dart';
 import 'prefectures.dart';
 import 'notification_page.dart';
 import 'lost_pet_page.dart';
+import 'volunteer_page.dart';
+import 'adoption_page.dart';
 
 class OrganizationHomePage extends StatefulWidget {
   const OrganizationHomePage({super.key});
@@ -346,7 +347,7 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -500,14 +501,12 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                 ),
               ),
             ),
-            const Text('投稿した里親募集',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF3D2B1F))),
+            const SizedBox(height: 24),
+            const _SectionHeader(
+                title: '投稿した里親募集',
+                hint: '押すと、利用者から見える画面を確認できます'),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 160,
+            Container(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('adoptions')
@@ -527,127 +526,131 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                     );
                   }
                   return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: docs.length,
                     itemBuilder: (_, i) {
                       final data = docs[i].data() as Map<String, dynamic>;
                       final docId = docs[i].id;
                       final isAdopted = data['status'] == 'adopted';
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      return GestureDetector(
+                          onTap: () => showAdoptionDetail(context, data),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: data['imageUrl'] != null &&
-                                      (data['imageUrl'] as String)
-                                          .isNotEmpty
-                                      ? Image.network(data['imageUrl'],
-                                      width: 56,
-                                      height: 56,
-                                      fit: BoxFit.cover)
-                                      : Container(
-                                    width: 56,
-                                    height: 56,
-                                    color: Colors.orange[50],
-                                    child: const Center(child: Text('🐾')),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                                Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: data['imageUrl'] != null &&
+                                          (data['imageUrl'] as String)
+                                              .isNotEmpty
+                                          ? Image.network(data['imageUrl'],
+                                          width: 56,
+                                          height: 56,
+                                          fit: BoxFit.cover)
+                                          : Container(
+                                        width: 56,
+                                        height: 56,
+                                        color: Colors.orange[50],
+                                        child: const Center(child: Text('🐾')),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
-                                          Expanded(
-                                            child: Text(data['petName'] ?? '',
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                    FontWeight.bold)),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(data['petName'] ?? '',
+                                                    style: const TextStyle(
+                                                        fontWeight:
+                                                        FontWeight.bold)),
+                                              ),
+                                              if (isAdopted)
+                                                Container(
+                                                  padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                      color:
+                                                      const Color(0xFF2D6A4F),
+                                                      borderRadius:
+                                                      BorderRadius.circular(
+                                                          6)),
+                                                  child: const Text('里親決定',
+                                                      style: TextStyle(
+                                                          fontSize: 9,
+                                                          color: Colors.white,
+                                                          fontWeight:
+                                                          FontWeight.bold)),
+                                                ),
+                                            ],
                                           ),
-                                          if (isAdopted)
-                                            Container(
-                                              padding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2),
-                                              decoration: BoxDecoration(
-                                                  color:
-                                                  const Color(0xFF2D6A4F),
-                                                  borderRadius:
-                                                  BorderRadius.circular(
-                                                      6)),
-                                              child: const Text('里親決定',
-                                                  style: TextStyle(
-                                                      fontSize: 9,
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                      FontWeight.bold)),
-                                            ),
+                                          Text(data['type'] ?? '',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600])),
                                         ],
                                       ),
-                                      Text(data['type'] ?? '',
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600])),
-                                    ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                const _TapHint(text: 'タップして、利用者から見える画面を確認'),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton(
+                                    onPressed: () async {
+                                      await FirebaseFirestore.instance
+                                          .collection('adoptions')
+                                          .doc(docId)
+                                          .update({
+                                        'status':
+                                        isAdopted ? 'available' : 'adopted'
+                                      });
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: isAdopted
+                                          ? Colors.grey[700]
+                                          : const Color(0xFF2D6A4F),
+                                      side: BorderSide(
+                                          color: isAdopted
+                                              ? Colors.grey[400]!
+                                              : const Color(0xFF2D6A4F)),
+                                      padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                    child: Text(
+                                        isAdopted ? '募集中に戻す' : '里親が決まりました',
+                                        style: const TextStyle(fontSize: 12)),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: () async {
-                                  await FirebaseFirestore.instance
-                                      .collection('adoptions')
-                                      .doc(docId)
-                                      .update({
-                                    'status':
-                                    isAdopted ? 'available' : 'adopted'
-                                  });
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: isAdopted
-                                      ? Colors.grey[700]
-                                      : const Color(0xFF2D6A4F),
-                                  side: BorderSide(
-                                      color: isAdopted
-                                          ? Colors.grey[400]!
-                                          : const Color(0xFF2D6A4F)),
-                                  padding:
-                                  const EdgeInsets.symmetric(vertical: 8),
-                                ),
-                                child: Text(
-                                    isAdopted ? '募集中に戻す' : '里親が決まりました',
-                                    style: const TextStyle(fontSize: 12)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
+                          ));
                     },
                   );
                 },
               ),
             ),
             const SizedBox(height: 20),
-            const Text('投稿したボランティア募集',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF3D2B1F))),
+            const _SectionHeader(
+                title: '投稿したボランティア募集',
+                hint: '押すと、「興味あります」の人を確認して、チャットを始められます'),
             const SizedBox(height: 12),
-            Expanded(
+            Container(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('volunteers')
@@ -667,118 +670,130 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                     );
                   }
                   return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: docs.length,
                     itemBuilder: (_, i) {
                       final data = docs[i].data() as Map<String, dynamic>;
                       final docId = docs[i].id;
                       final isClosed = data['status'] == 'closed';
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      return GestureDetector(
+                          onTap: () => VolunteerPage.showDetail(context, docId, data),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: data['imageUrl'] != null &&
-                                      (data['imageUrl'] as String)
-                                          .isNotEmpty
-                                      ? Image.network(data['imageUrl'],
-                                      width: 56,
-                                      height: 56,
-                                      fit: BoxFit.cover)
-                                      : Container(
-                                    width: 56,
-                                    height: 56,
-                                    color: const Color(0xFFE8845A)
-                                        .withOpacity(0.1),
-                                    child: const Center(child: Text('🤝')),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
+                                Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: data['imageUrl'] != null &&
+                                          (data['imageUrl'] as String)
+                                              .isNotEmpty
+                                          ? Image.network(data['imageUrl'],
+                                          width: 56,
+                                          height: 56,
+                                          fit: BoxFit.cover)
+                                          : Container(
+                                        width: 56,
+                                        height: 56,
+                                        color: const Color(0xFFE8845A)
+                                            .withOpacity(0.1),
+                                        child: const Center(child: Text('🤝')),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
-                                          Expanded(
-                                            child: Text(data['title'] ?? '',
-                                                style: const TextStyle(
-                                                    fontWeight:
-                                                    FontWeight.bold)),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(data['title'] ?? '',
+                                                    style: const TextStyle(
+                                                        fontWeight:
+                                                        FontWeight.bold)),
+                                              ),
+                                              if (isClosed)
+                                                Container(
+                                                  padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                      color: Colors.grey,
+                                                      borderRadius:
+                                                      BorderRadius.circular(
+                                                          6)),
+                                                  child: const Text('締切',
+                                                      style: TextStyle(
+                                                          fontSize: 9,
+                                                          color: Colors.white,
+                                                          fontWeight:
+                                                          FontWeight.bold)),
+                                                ),
+                                            ],
                                           ),
-                                          if (isClosed)
-                                            Container(
-                                              padding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2),
-                                              decoration: BoxDecoration(
-                                                  color: Colors.grey,
-                                                  borderRadius:
-                                                  BorderRadius.circular(
-                                                      6)),
-                                              child: const Text('締切',
-                                                  style: TextStyle(
-                                                      fontSize: 9,
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                      FontWeight.bold)),
-                                            ),
+                                          Text(data['location'] ?? '',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600])),
                                         ],
                                       ),
-                                      Text(data['location'] ?? '',
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600])),
-                                    ],
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                _VolunteerHint(volunteerId: docId),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton(
+                                    onPressed: () async {
+                                      await FirebaseFirestore.instance
+                                          .collection('volunteers')
+                                          .doc(docId)
+                                          .update({
+                                        'status': isClosed ? 'open' : 'closed'
+                                      });
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: isClosed
+                                          ? const Color(0xFF2D6A4F)
+                                          : Colors.grey[700],
+                                      side: BorderSide(
+                                          color: isClosed
+                                              ? const Color(0xFF2D6A4F)
+                                              : Colors.grey[400]!),
+                                      padding:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                    child: Text(
+                                        isClosed ? '募集を再開する' : '募集を締め切る',
+                                        style: const TextStyle(fontSize: 12)),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: () async {
-                                  await FirebaseFirestore.instance
-                                      .collection('volunteers')
-                                      .doc(docId)
-                                      .update({
-                                    'status': isClosed ? 'open' : 'closed'
-                                  });
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: isClosed
-                                      ? const Color(0xFF2D6A4F)
-                                      : Colors.grey[700],
-                                  side: BorderSide(
-                                      color: isClosed
-                                          ? const Color(0xFF2D6A4F)
-                                          : Colors.grey[400]!),
-                                  padding:
-                                  const EdgeInsets.symmetric(vertical: 8),
-                                ),
-                                child: Text(
-                                    isClosed ? '募集を再開する' : '募集を締め切る',
-                                    style: const TextStyle(fontSize: 12)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
+                          ));
                     },
                   );
                 },
               ),
             ),
+            const SizedBox(height: 20),
+            const _SectionHeader(
+                title: '投稿した迷子情報',
+                hint: '押すと、内容の確認と「見つかりました」への切り替えができます'),
+            const SizedBox(height: 12),
+            const _PostedLostList(),
           ],
         ),
       ),
@@ -1351,6 +1366,212 @@ class _EditOrgSheetState extends State<_EditOrgSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String hint;
+  const _SectionHeader({required this.title, required this.hint});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF3D2B1F))),
+          const SizedBox(height: 2),
+          Text(hint, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+        ],
+      ),
+    );
+  }
+}
+
+class _TapHint extends StatelessWidget {
+  final String text;
+  const _TapHint({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.touch_app_rounded, size: 14, color: Color(0xFFE8845A)),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(fontSize: 11, color: Color(0xFFE8845A))),
+        ),
+        const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+      ],
+    );
+  }
+}
+
+class _VolunteerHint extends StatelessWidget {
+  final String volunteerId;
+  const _VolunteerHint({required this.volunteerId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('volunteers')
+          .doc(volunteerId)
+          .collection('interested')
+          .snapshots(),
+      builder: (context, snap) {
+        final count = snap.data?.docs.length ?? 0;
+        return Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: count > 0
+                    ? const Color(0xFFE8845A)
+                    : Colors.grey.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                count > 0 ? '🙋 興味あります $count人' : '🙋 興味ありの人はまだいません',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: count > 0 ? Colors.white : Colors.grey[600],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('タップして確認・チャット',
+                  style: TextStyle(fontSize: 11, color: Color(0xFFE8845A))),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PostedLostList extends StatelessWidget {
+  const _PostedLostList();
+
+  static int _ms(dynamic t) =>
+      t is Timestamp ? t.millisecondsSinceEpoch : 9999999999999;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('lostPets')
+          .where('uid', isEqualTo: uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(
+                child: CircularProgressIndicator(color: Color(0xFF3498DB))),
+          );
+        }
+        final docs = snapshot.data!.docs.toList();
+        docs.sort((a, b) => _ms((b.data() as Map<String, dynamic>)['createdAt'])
+            .compareTo(_ms((a.data() as Map<String, dynamic>)['createdAt'])));
+        if (docs.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: Text('まだ投稿がありません🔍',
+                  style: TextStyle(color: Colors.grey)),
+            ),
+          );
+        }
+        return Column(
+          children: docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final resolved = data['status'] == 'resolved';
+            final image = (data['imageUrl'] ?? '').toString();
+            return GestureDetector(
+              onTap: () => showLostPetDetail(context, data, doc.id),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: image.isNotEmpty
+                              ? Image.network(image,
+                              width: 56, height: 56, fit: BoxFit.cover)
+                              : Container(
+                            width: 56,
+                            height: 56,
+                            color:
+                            const Color(0xFF3498DB).withOpacity(0.1),
+                            child: const Center(child: Text('🐾')),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text((data['petName'] ?? '').toString(),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: resolved
+                                            ? const Color(0xFF2D6A4F)
+                                            : const Color(0xFF3498DB),
+                                        borderRadius: BorderRadius.circular(6)),
+                                    child: Text(resolved ? '見つかりました' : '迷子中',
+                                        style: const TextStyle(
+                                            fontSize: 9,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                              Text((data['location'] ?? '').toString(),
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[600])),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const _TapHint(text: 'タップして、内容の確認・「見つかりました」に切り替え'),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }

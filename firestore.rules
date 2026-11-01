@@ -2,6 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── v11（2026-11-01）：里親募集・ボランティア募集は、運営が承認した団体だけが、自分の団体名で投稿できる。
+    //    「興味あります」を押した人は、その団体だけが見られる。名前を偽れない ──
     // ── v10（2026-11-01）：ブロックを悪用されないようにした。だれがだれをブロックしたかを、ほかの人が見られない。
     //    ブロックされた人は、1対1のチャットにメッセージを送れない。チャットのメッセージは、送り主を偽れない・他人のメッセージを書きかえられない ──
     // ── v9（2026-11-01）：ペット自慢の票を、1人1票より多く増やせないようにした ──
@@ -341,21 +343,76 @@ service cloud.firestore {
       );
       allow delete: if request.auth != null && request.auth.uid == orgId;
     }
+    // 運営が承認した団体か（承認前の団体や、ふつうの利用者は、団体として投稿できない）
+    function isApprovedOrg() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/organizations/$(request.auth.uid))
+        && get(/databases/$(database)/documents/organizations/$(request.auth.uid)).data.status == 'approved';
+    }
+    // 団体名は、その団体の本当の名前だけ（ほかの団体になりすませない）
+    function myOrgName() {
+      return get(/databases/$(database)/documents/organizations/$(request.auth.uid)).data.name;
+    }
+    // 文字の項目が、なし か、文字で n 字まで
+    function strMax(d, k, n) {
+      return !(k in d) || (d[k] is string && d[k].size() <= n);
+    }
+    function adoptionOk(d) {
+      return strMax(d, 'petName', 20) && strMax(d, 'type', 30) && strMax(d, 'age', 15)
+        && strMax(d, 'personality', 500) && strMax(d, 'background', 800)
+        && strMax(d, 'conditions', 500) && strMax(d, 'imageUrl', 500);
+    }
+    function volunteerOk(d) {
+      return strMax(d, 'title', 40) && strMax(d, 'location', 50) && strMax(d, 'area', 10)
+        && strMax(d, 'schedule', 50) && strMax(d, 'description', 800) && strMax(d, 'imageUrl', 500);
+    }
     match /adoptions/{adoptionId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.orgId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.orgId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.orgId;
+      allow create: if isApprovedOrg()
+        && request.resource.data.orgId == request.auth.uid
+        && request.resource.data.orgName == myOrgName()
+        && adoptionOk(request.resource.data);
+      // 書きかえは自分の投稿だけ。だれの投稿か（orgId・orgName）は変えられない
+      allow update: if request.auth != null && request.auth.uid == resource.data.orgId
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.orgName == resource.data.orgName
+        && adoptionOk(request.resource.data);
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.orgId || isAdmin());
     }
     match /volunteers/{volunteerId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.orgId;
-      allow update: if request.auth != null && request.auth.uid == resource.data.orgId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.orgId;
+      allow create: if isApprovedOrg()
+        && request.resource.data.orgId == request.auth.uid
+        && request.resource.data.orgName == myOrgName()
+        && volunteerOk(request.resource.data);
+      allow update: if request.auth != null && request.auth.uid == resource.data.orgId
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.orgName == resource.data.orgName
+        && volunteerOk(request.resource.data);
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.orgId || isAdmin());
 
+      // 「興味あります」：だれが押したかは、その団体（と運営）だけが見られる。押した本人は自分の分だけ
       match /interested/{uid} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == uid;
+        allow get: if request.auth != null && (
+          request.auth.uid == uid ||
+          request.auth.uid == get(/databases/$(database)/documents/volunteers/$(volunteerId)).data.orgId ||
+          isAdmin()
+        );
+        allow list: if request.auth != null && (
+          request.auth.uid == get(/databases/$(database)/documents/volunteers/$(volunteerId)).data.orgId ||
+          isAdmin()
+        );
+        // 押すのは自分の分だけ。名前は自分のプロフィールの名前だけ（ほかの人になりすませない）
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'createdAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.name ==
+               get(/databases/$(database)/documents/users/$(uid)).data.get('name', '名無しさん')
+          && request.resource.data.createdAt == request.time;
+        allow delete: if request.auth != null && (
+          request.auth.uid == uid ||
+          request.auth.uid == get(/databases/$(database)/documents/volunteers/$(volunteerId)).data.orgId
+        );
       }
     }
     match /lostPets/{postId} {
