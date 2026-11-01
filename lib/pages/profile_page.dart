@@ -1,4 +1,5 @@
 import 'pet_detail_page.dart';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'edit_profile_page.dart';
 import 'package:flutter/services.dart';
@@ -238,8 +239,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               borderRadius: BorderRadius.circular(16),
                               color: Colors.orange[50]),
                           child: isUploadingImage
-                              ? const Center(child: CircularProgressIndicator(
-                              color: Color(0xFFE8845A)))
+                              ? const AnimaruLoading()
                               : imageUrl != null && imageUrl!.isNotEmpty
                               ? ClipRRect(
                               borderRadius: BorderRadius.circular(16),
@@ -1086,8 +1086,7 @@ class _AddPetSheetState extends State<_AddPetSheet> {
                         borderRadius: BorderRadius.circular(16),
                         color: Colors.orange[50]),
                     child: _isUploadingImage
-                        ? const Center(child: CircularProgressIndicator(
-                        color: Color(0xFFE8845A)))
+                        ? const AnimaruLoading()
                         : _imageUrl != null
                         ? ClipRRect(
                         borderRadius: BorderRadius.circular(16),

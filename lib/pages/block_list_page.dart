@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -118,9 +119,7 @@ class _BlockListPageState extends State<BlockListPage> {
         elevation: 0,
       ),
       body: _isLoading
-          ? const Center(
-          child: CircularProgressIndicator(
-              color: Color(0xFFE8845A)))
+          ? const AnimaruLoading()
           : _blockedUsers.isEmpty
           ? const Center(
         child: Column(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'pet_themes.dart';
@@ -70,8 +71,7 @@ class _BadgeProgressPageState extends State<BadgeProgressPage>
         ),
       ),
       body: _isLoading
-          ? const Center(
-          child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+          ? const AnimaruLoading()
           : TabBarView(
         controller: _tabController,
         children: [

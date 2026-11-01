@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -542,9 +543,7 @@ class _EventChatPageState extends State<EventChatPage> {
               stream: _messageStream,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
-                  return const Center(
-                      child: CircularProgressIndicator(
-                          color: Color(0xFFE8845A)));
+                  return const AnimaruLoading();
                 }
                 final messages = snapshot.data!.docs
                     .where((m) => !BlockedUsers.instance.isBlocked(m.data()['senderUid']))

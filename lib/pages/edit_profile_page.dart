@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -360,8 +361,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(
-          color: Color(0xFFE8845A)))
+          ? const AnimaruLoading()
           : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -399,9 +399,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               color: const Color(0xFFE8845A),
                               width: 2)),
                       child: _isUploadingImage
-                          ? const Center(
-                          child: CircularProgressIndicator(
-                              color: Color(0xFFE8845A)))
+                          ? const AnimaruLoading()
                           : _profileImageUrl != null &&
                           _profileImageUrl!.isNotEmpty
                           ? ClipOval(

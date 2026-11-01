@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -153,7 +154,7 @@ class _QuestionList extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+          return const AnimaruLoading();
         }
         var docs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
@@ -381,7 +382,7 @@ class _PostQuestionSheetState extends State<_PostQuestionSheet> {
                 image: _imageUrl != null ? DecorationImage(image: NetworkImage(_imageUrl!), fit: BoxFit.cover) : null,
               ),
               child: _isUploading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+                  ? const AnimaruLoading()
                   : (_imageUrl == null
                   ? const Center(child: Text('📷 写真を追加（任意）', style: TextStyle(color: Colors.grey)))
                   : null),

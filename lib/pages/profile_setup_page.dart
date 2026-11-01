@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
@@ -211,8 +212,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                                 border: Border.all(
                                     color: const Color(0xFFE8845A), width: 2)),
                             child: _isUploadingImage
-                                ? const Center(child: CircularProgressIndicator(
-                                color: Color(0xFFE8845A)))
+                                ? const AnimaruLoading()
                                 : _profileImageUrl != null
                                 ? ClipOval(child: Image.network(
                                 _profileImageUrl!,

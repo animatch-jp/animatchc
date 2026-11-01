@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
@@ -128,8 +129,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
         ],
       ),
       body: _isLoading
-          ? const Center(
-          child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+          ? const AnimaruLoading()
           : Column(
         children: [
           Expanded(
@@ -402,9 +402,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: _isUploading
-                        ? const Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFFE8845A)))
+                        ? const AnimaruLoading()
                         : _imageUrl != null
                         ? ClipRRect(
                         borderRadius: BorderRadius.circular(16),

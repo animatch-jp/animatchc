@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'organization_profile_page.dart';
@@ -327,7 +328,7 @@ class _TimelineList extends StatelessWidget {
                       .snapshots(),
                   builder: (context, hospSnap) {
                     if (!lostSnap.hasData || !volSnap.hasData || !orgSnap.hasData || !hospSnap.hasData) {
-                      return const Center(child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+                      return const AnimaruLoading();
                     }
 
                     final items = <_TimelineItem>[];

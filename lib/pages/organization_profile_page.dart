@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_page.dart';
@@ -26,8 +27,7 @@ class OrganizationProfilePage extends StatelessWidget {
             .get(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+            return const AnimaruLoading();
           }
           if (!snapshot.data!.exists) {
             return const Center(child: Text('団体情報が見つかりません'));

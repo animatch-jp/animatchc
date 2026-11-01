@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat_page.dart';
 import 'organization_profile_page.dart';
@@ -146,8 +147,7 @@ class AdoptionPage extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+            return const AnimaruLoading();
           }
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import '../widgets/animaru.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -33,8 +34,7 @@ class OrganizationPendingPage extends StatelessWidget {
               .snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
-              return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+              return const AnimaruLoading();
             }
 
             final data = snapshot.data!.data() as Map<String, dynamic>?;
@@ -48,8 +48,7 @@ class OrganizationPendingPage extends StatelessWidget {
                       (route) => false,
                 );
               });
-              return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+              return const AnimaruLoading();
             }
 
             if (status == 'rejected') {

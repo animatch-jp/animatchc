@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_profile_page.dart';
@@ -254,8 +255,7 @@ class _NotificationPageState extends State<NotificationPage> {
         ],
       ),
       body: _isLoading
-          ? const Center(
-          child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+          ? const AnimaruLoading()
           : _notifs.isEmpty
           ? const Center(
         child: Column(

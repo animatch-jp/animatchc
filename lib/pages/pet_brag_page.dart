@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -631,8 +632,7 @@ class _PetBragListState extends State<_PetBragList> {
                       style: const TextStyle(color: Colors.red)));
             }
             if (!snapshot.hasData) {
-              return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+              return const AnimaruLoading();
             }
             var docs = snapshot.data!.docs
                 .where((d) => !BlockedUsers.instance
@@ -706,9 +706,7 @@ class _PetBragListState extends State<_PetBragList> {
                                   width: double.infinity,
                                   height: 260,
                                   color: Colors.orange[50],
-                                  child: const Center(
-                                      child: CircularProgressIndicator(
-                                          color: Color(0xFFE8845A))),
+                                  child: const AnimaruLoading(),
                                 );
                               },
                               errorBuilder: (context, error, stackTrace) => Container(
@@ -1252,8 +1250,7 @@ class _RecommendedListState extends State<_RecommendedList> {
                   style: const TextStyle(color: Colors.red)));
         }
         if (!snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+          return const AnimaruLoading();
         }
 
         final docs = snapshot.data!.docs
@@ -1794,8 +1791,7 @@ class _PostBragSheetState extends State<_PostBragSheet> {
                   color: Colors.orange[50],
                   borderRadius: BorderRadius.circular(16)),
               child: _isUploading
-                  ? const Center(
-                  child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+                  ? const AnimaruLoading()
                   : _imageUrl != null
                   ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
@@ -2072,7 +2068,7 @@ class _PostMonthlyBragSheetState extends State<_PostMonthlyBragSheet> {
                   color: Colors.orange[50],
                   borderRadius: BorderRadius.circular(16)),
               child: _isUploading
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8845A)))
+                  ? const AnimaruLoading()
                   : _imageUrl != null
                   ? ClipRRect(
                   borderRadius: BorderRadius.circular(16),
@@ -2194,8 +2190,7 @@ class _MonthlyBestList extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+          return const AnimaruLoading();
         }
         var docs = snapshot.data!.docs
             .where((d) => !BlockedUsers.instance
@@ -2380,8 +2375,7 @@ class _MyPostsList extends StatelessWidget {
                   style: const TextStyle(color: Colors.red)));
         }
         if (!snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+          return const AnimaruLoading();
         }
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {

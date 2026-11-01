@@ -1,4 +1,5 @@
 import '../services/cloudinary_service.dart';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1163,8 +1164,7 @@ class _EventPageState extends State<EventPage> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(
-                child: CircularProgressIndicator(color: _orange))
+                ? const AnimaruLoading()
                 : events.isEmpty
                 ? Center(
               child: Column(
@@ -2032,8 +2032,7 @@ class _EventPageState extends State<EventPage> {
                     border: Border.all(color: Colors.grey[300]!),
                   ),
                   child: isUploadingImage
-                      ? const Center(
-                      child: CircularProgressIndicator(color: _orange))
+                      ? const AnimaruLoading()
                       : selectedImageUrl != null
                       ? ClipRRect(
                     borderRadius: BorderRadius.circular(14),

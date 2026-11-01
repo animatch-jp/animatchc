@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
@@ -516,9 +517,7 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
-                    return const Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFFE8845A)));
+                    return const AnimaruLoading();
                   }
                   final docs = snapshot.data!.docs;
                   if (docs.isEmpty) {
@@ -658,9 +657,7 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
-                    return const Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFFE8845A)));
+                    return const AnimaruLoading();
                   }
                   final docs = snapshot.data!.docs;
                   if (docs.isEmpty) {
