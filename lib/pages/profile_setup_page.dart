@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/signup_decor.dart';
 import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:image_picker/image_picker.dart';
@@ -135,8 +136,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ProfileSetupPage2(
+      signupRoute(
+        ProfileSetupPage2(
           name: _nameCtrl.text.trim(),
           age: age,
           birthDate: AgeUtils.format(_birthDate!),
@@ -155,16 +156,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 80, 24, 40),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFE8845A), Color(0xFFF4A261)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
+            SignupHeader(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -185,7 +177,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               padding: const EdgeInsets.all(24),
 
 
-              child: Column(
+              child: StaggerColumn(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Center(

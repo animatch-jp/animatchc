@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -123,7 +124,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const ProfileSetupPage3()),
+          signupRoute(const ProfileSetupPage3()),
               (route) => false,
         );
       }
@@ -146,16 +147,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 80, 24, 40),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFE8845A), Color(0xFFF4A261)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
+            SignupHeader(
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -174,7 +166,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
             ),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Column(
+              child: StaggerColumn(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('自己紹介',

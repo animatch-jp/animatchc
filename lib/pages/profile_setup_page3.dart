@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
 import 'welcome_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -40,7 +41,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
   void _skip() {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const WelcomePage()),
+      signupRoute(const WelcomePage()),
           (route) => false,
     );
   }
@@ -93,7 +94,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => WelcomePage(petCount: _pets.length)),
+        signupRoute(WelcomePage(petCount: _pets.length)),
             (route) => false,
       );
     } catch (e) {
@@ -132,7 +133,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: Column(
+              child: StaggerColumn(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(

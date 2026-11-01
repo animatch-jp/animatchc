@@ -1,4 +1,5 @@
 import 'profile_setup_page.dart';
+import '../widgets/signup_decor.dart';
 import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:flutter/material.dart';
@@ -119,10 +120,7 @@ class _RegisterPageState extends State<RegisterPage> {
       );
       await _recordConsent(cred.user?.uid);
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
-        );
+        Navigator.pushReplacement(context, signupRoute(const ProfileSetupPage()));
       }
     } on FirebaseAuthException catch (e) {
       String message = '登録に失敗しました';
@@ -177,16 +175,7 @@ class _RegisterPageState extends State<RegisterPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 80, 24, 40),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFE8845A), Color(0xFFF4A261)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
+            SignupHeader(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -226,7 +215,7 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Column(
+              child: StaggerColumn(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('新規登録',
