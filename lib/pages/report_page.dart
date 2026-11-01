@@ -83,6 +83,8 @@ await FirebaseFirestore.instance
 .collection('items')
 .add({
 'type': 'adminReport',
+// ルールで「送り主が自分」のときだけ届けられるので、送り主を入れる
+'senderUid': FirebaseAuth.instance.currentUser?.uid,
 'emoji': '🚨',
 'title': '新しい通報があります',
 'desc': '運営管理画面で確認してください（理由：${_selectedReason ?? ''}）',

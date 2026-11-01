@@ -1,0 +1,344 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── v8（2026-11-01）：運営（admins）ができることを足し、イベントのチャットを安全にした ──
+
+    // 運営（admins に入っている人）かどうか
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // イベントの参加者か主催者かどうか
+    function isEventMember(eventId) {
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/events/$(eventId)/participants/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/events/$(eventId)).data.organizerUid == request.auth.uid
+      );
+    }
+
+    // ── 年齢・キャンセル回数・参加停止を、アプリからの書き換えで変えられないようにする部品 ──
+
+    // 生年月日（'YYYY-MM-DD'）から、日本時間での今の年齢を出す
+    function ageFrom(b) {
+      let jst = request.time + duration.time(9, 0, 0, 0);
+      let p = b.split('-');
+      let y = int(p[0]);
+      let m = int(p[1]);
+      let d = int(p[2]);
+      return jst.year() - y - ((jst.month() < m || (jst.month() == m && jst.day() < d)) ? 1 : 0);
+    }
+
+    // 書き込み後の生年月日と、書こうとしている年齢が合っているか
+    function ageValid(uid) {
+      let bpath = /databases/$(database)/documents/users/$(uid)/private/birth;
+      return existsAfter(bpath)
+        && request.resource.data.age == ageFrom(getAfter(bpath).data.birthDate);
+    }
+
+    // キャンセル回数は、1回ぶんしか増やせない（減らす・リセットは不可）
+    function cancelOk() {
+      return request.resource.data.cancelCount == resource.data.get('cancelCount', 0) + 1;
+    }
+
+    // 参加停止の期限は、これから25時間以内の未来にだけ設定できる。短くする・消すことは不可
+    function suspendOk() {
+      return 'eventSuspendedUntil' in request.resource.data
+        && request.resource.data.eventSuspendedUntil is timestamp
+        && request.resource.data.eventSuspendedUntil > request.time
+        && request.resource.data.eventSuspendedUntil <= request.time + duration.time(25, 0, 0, 0)
+        && (!('eventSuspendedUntil' in resource.data)
+            || request.resource.data.eventSuspendedUntil >= resource.data.eventSuspendedUntil);
+    }
+
+    // 回答の「役に立った」は、誰でも押せる。ただし、増やせるのも減らせるのも、自分のIDだけ
+    function helpfulOk() {
+      let before = resource.data.get('helpfulBy', []).toSet();
+      let after = request.resource.data.helpfulBy.toSet();
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['helpfulBy'])
+        && after.difference(before).hasOnly([request.auth.uid])
+        && before.difference(after).hasOnly([request.auth.uid]);
+    }
+
+    match /{path=**}/liked/{targetId} {
+      allow read: if request.auth != null;
+    }
+    match /{path=**}/favorited/{targetId} {
+      allow read: if request.auth != null;
+    }
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && (!('age' in request.resource.data) || ageValid(userId));
+      // 本人：自分のプロフィールを直せる。ただし「一時停止」は自分では変えられない
+      // 運営：「一時停止」と、その日時だけ変えられる
+      allow update: if (request.auth != null && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['suspended', 'suspendedAt'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
+            || ageValid(userId))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cancelCount'])
+            || cancelOk())
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['eventSuspendedUntil'])
+            || suspendOk()))
+        || (isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['suspended', 'suspendedAt']));
+      allow delete: if request.auth != null && (
+        request.auth.uid == userId ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+      match /pets/{petId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == userId;
+
+        match /tasks/{taskId} {
+          allow read: if request.auth != null;
+          allow write: if request.auth != null && request.auth.uid == userId;
+
+          match /logs/{logId} {
+            allow read: if request.auth != null;
+            allow write: if request.auth != null && request.auth.uid == userId;
+          }
+        }
+      }
+      match /searchHistory/{historyId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /groupChatLastSeen/{eventId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /private/{docId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        // 生年月日（birth）は、最初の登録だけ。あとから書き換えられない
+        allow create: if request.auth != null && request.auth.uid == userId;
+        // （プロフィールがまだ無い人が、登録をやり直すときだけは、書き直せる）
+        allow update: if request.auth != null && request.auth.uid == userId
+          && (docId != 'birth' || !exists(/databases/$(database)/documents/users/$(userId)));
+        // 生年月日は、アカウント本体と一緒に消すときだけ消せる
+        allow delete: if request.auth != null && request.auth.uid == userId
+          && (docId != 'birth' || !existsAfter(/databases/$(database)/documents/users/$(userId)));
+      }
+    }
+    match /likes/{userId}/liked/{targetId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /favorites/{userId}/favorited/{targetId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /chats/{chatId} {
+      allow get: if request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+      allow list: if request.auth != null && request.auth.uid in resource.data.participants;
+      allow create, update, delete: if request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+      }
+    }
+    match /blocks/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      match /blocked/{blockedId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    match /reports/{reportId} {
+      allow read: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    match /footprints/{userId}/visitors/{visitorId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == visitorId;
+    }
+    match /notifications/{userId}/items/{itemId} {
+      // 自分あての通知だけ読める
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // 通知を送る（作る）。送り主（senderUid または fromUid）が自分のときだけ。
+      // 管理者からのお知らせは、管理者なら送れる
+      allow create: if request.auth != null && (
+        request.resource.data.get('senderUid',
+          request.resource.data.get('fromUid', '')) == request.auth.uid ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+      // 更新できるのは、①本人（既読にするなど） ②グループチャット通知の上書き（送り主が自分のとき）
+      allow update: if request.auth != null && (
+        request.auth.uid == userId ||
+        (itemId.matches('groupChat_.*') &&
+          request.resource.data.fromUid == request.auth.uid)
+      );
+      // 削除できるのは本人だけ
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    match /contacts/{contactId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.uid ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    match /reviews/{userId}/received/{reviewerId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == reviewerId;
+    }
+    match /events/{eventId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.organizerUid == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('age', 0) >= 18;
+      allow update: if request.auth != null && (
+        (resource.data.organizerUid == request.auth.uid
+          && request.resource.data.organizerUid == resource.data.organizerUid) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
+          && (request.resource.data.participantCount - resource.data.participantCount) in [-1, 1])
+      );
+      allow delete: if request.auth != null && (
+        resource.data.organizerUid == request.auth.uid ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+
+      match /participants/{uid} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && request.auth.uid == uid
+          && !(request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('bannedUsers', []))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('age', 0) >= 18;
+        allow delete: if request.auth != null && (
+          request.auth.uid == uid ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.organizerUid == request.auth.uid
+        );
+      }
+      match /messages/{messageId} {
+        // 読める：参加者・主催者・運営（通報の確認のため）
+        allow read: if isEventMember(eventId) || isAdmin();
+        // 送れる：参加者・主催者。送り主は自分の名前でだけ（「〜さんが参加しました」のお知らせは例外）
+        allow create: if isEventMember(eventId) && (
+          request.resource.data.senderUid == request.auth.uid ||
+          (request.resource.data.get('isSystem', false) == true
+            && request.resource.data.senderUid == 'system')
+        );
+        // 変えられる：自分のメッセージ。ほかの人のメッセージは、リアクションだけ
+        allow update: if isEventMember(eventId) && (
+          resource.data.senderUid == request.auth.uid ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+        );
+        // 消せる：自分のメッセージ・主催者・運営
+        allow delete: if request.auth != null && (
+          resource.data.senderUid == request.auth.uid ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.organizerUid == request.auth.uid ||
+          isAdmin()
+        );
+      }
+      match /cancellations/{cancelId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+    }
+    match /petBrags/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update: if request.auth != null &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.petName == resource.data.petName &&
+        request.resource.data.imageUrl == resource.data.imageUrl &&
+        request.resource.data.comment == resource.data.comment &&
+        request.resource.data.theme == resource.data.theme &&
+        request.resource.data.animalType == resource.data.animalType;
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.uid ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+
+      match /voters/{voterId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == voterId;
+      }
+
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+        allow delete: if request.auth != null && (
+          request.auth.uid == resource.data.uid ||
+          request.auth.uid == get(/databases/$(database)/documents/petBrags/$(postId)).data.uid ||
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        );
+      }
+    }
+    match /organizations/{orgId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == orgId;
+      allow update: if request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.uid == orgId &&
+         request.resource.data.status == resource.data.status)
+      );
+      allow delete: if request.auth != null && request.auth.uid == orgId;
+    }
+    match /adoptions/{adoptionId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.orgId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.orgId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.orgId;
+    }
+    match /volunteers/{volunteerId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.orgId;
+      allow update: if request.auth != null && request.auth.uid == resource.data.orgId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.orgId;
+
+      match /interested/{uid} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+    match /lostPets/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
+    match /hospitals/{hospitalId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == hospitalId;
+      allow update: if request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.uid == hospitalId &&
+         request.resource.data.status == resource.data.status)
+      );
+      allow delete: if request.auth != null && request.auth.uid == hospitalId;
+
+      match /tagVotes/{voteId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null && request.auth.uid == voteId;
+      }
+    }
+    match /questions/{questionId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      // 消せる：本人と運営（通報された質問を消すため）
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.uid || isAdmin());
+
+      match /answers/{answerId} {
+        allow read: if request.auth != null;
+        // 回答を作るとき、「役に立った」は空で始める（最初から票を入れておけない）
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
+          && request.resource.data.get('helpfulBy', []).size() == 0;
+        // 回答への更新は「役に立った」の付け外しだけ。自分の回答には付けられない
+        allow update: if request.auth != null
+          && request.auth.uid != resource.data.uid
+          && helpfulOk();
+        // 消せる：本人と運営（通報された回答を消すため）
+        allow delete: if request.auth != null && (request.auth.uid == resource.data.uid || isAdmin());
+      }
+    }
+    match /admins/{adminId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}
