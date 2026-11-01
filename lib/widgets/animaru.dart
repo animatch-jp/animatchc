@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// AniMatchのキャラクター「アニマル」
+/// AniMatchのキャラクター「あにまる」
 /// おもちみたいな、なにものでもない生き物。頭に緑のぽこぽこ。目はちょぼてん。
 ///
 /// size: 横はば（たても同じ）
@@ -44,7 +44,7 @@ class _AnimaruState extends State<Animaru> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'アニマル',
+      label: 'あにまる',
       image: true,
       child: SizedBox(
         width: widget.size,

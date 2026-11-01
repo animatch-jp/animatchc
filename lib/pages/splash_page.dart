@@ -365,7 +365,7 @@ class _SplashPageState extends State<SplashPage>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // アニマルが、ロゴのあとに、ぴょこっと出てきて手をふる
+                    // あにまるが、ロゴのあとに、ぴょこっと出てきて手をふる
                     Opacity(
                       opacity: _part(0.6, 0.75),
                       child: Transform.translate(
