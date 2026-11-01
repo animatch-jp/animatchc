@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru.dart';
+import '../widgets/animaru_guide.dart';
+import '../widgets/signup_decor.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register_page.dart';
 import 'root_page.dart';
@@ -24,10 +27,33 @@ final _passCtrl = TextEditingController();
 bool _obscurePassword = true;
 bool _isLoading = false;
 
+// あにまるの案内（パスワードを入れるときは、目をかくす）
+final _passFocus = FocusNode();
+String _guideMsg = 'おかえり！\nログインして、うちの子に会いに行こう';
+AnimaruMood _guideMood = AnimaruMood.normal;
+
+@override
+void initState() {
+super.initState();
+_passFocus.addListener(() {
+if (!mounted) return;
+setState(() {
+if (_passFocus.hasFocus) {
+_guideMsg = 'パスワードは見ないようにしてるよ…！';
+_guideMood = AnimaruMood.shy;
+} else {
+_guideMsg = 'おかえり！\nログインして、うちの子に会いに行こう';
+_guideMood = AnimaruMood.normal;
+}
+});
+});
+}
+
 @override
 void dispose() {
 _emailCtrl.dispose();
 _passCtrl.dispose();
+_passFocus.dispose();
 super.dispose();
 }
 
@@ -233,16 +259,7 @@ Widget build(BuildContext context) {
     body: SingleChildScrollView(
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(24, 80, 24, 40),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFFE8845A), Color(0xFFF4A261)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
+          SignupHeader(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -266,6 +283,8 @@ Widget build(BuildContext context) {
                         color: Colors.white)),
                 const Text('Find Your Wild Connection',
                     style: TextStyle(fontSize: 14, color: Colors.white70)),
+                const SizedBox(height: 18),
+                AnimaruGuide(step: null, message: _guideMsg, mood: _guideMood),
               ],
             ),
           ),
@@ -273,7 +292,7 @@ Widget build(BuildContext context) {
 
           Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
+            child: StaggerColumn(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('ログイン',
@@ -304,6 +323,7 @@ Widget build(BuildContext context) {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passCtrl,
+                  focusNode: _passFocus,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     labelText: 'パスワード',
