@@ -5,9 +5,39 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_profile_page.dart';
 import 'notification_prefs.dart';
 import 'report_page.dart';
+import '../services/cloudinary_service.dart';
+import '../services/blocked_users.dart';
 
 // グループチャットの1メッセージの文字数の上限
 const int _messageMaxLength = 1000;
+
+const _orange = Color(0xFFE8845A);
+const _brown = Color(0xFF3D2B1F);
+
+// スタンプ（押すとそのまま送れる、動物のひとこと）
+const _stamps = [
+  ('🐶', 'よろしく！'),
+  ('🐱', 'ありがとう'),
+  ('🐰', '楽しみ！'),
+  ('🐹', '了解です'),
+  ('🦜', 'おつかれさま'),
+  ('🐾', '行きます！'),
+  ('🐢', '少し遅れます'),
+  ('📍', '着きました'),
+  ('😍', 'かわいい！'),
+  ('📸', '写真ありがとう'),
+  ('👋', 'またね'),
+  ('🌙', 'おやすみ'),
+];
+
+// メッセージへのリアクション（キーは Firestore に入れる名前）
+const _reactions = [
+  ('paw', '🐾'),
+  ('love', '😍'),
+  ('laugh', '😂'),
+  ('good', '👍'),
+  ('thanks', '🙏'),
+];
 
 class EventChatPage extends StatefulWidget {
   final String eventId;
@@ -28,6 +58,9 @@ class _EventChatPageState extends State<EventChatPage> {
   final _scrollCtrl = ScrollController();
   String? _myName;
   String? _myImageUrl;
+  String? _organizerUid;
+  bool _showStamps = false;
+  bool _uploading = false;
 
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _messageStream;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _seenSub;
@@ -47,6 +80,13 @@ class _EventChatPageState extends State<EventChatPage> {
         _messagesRef.orderBy('createdAt', descending: true).snapshots();
     _loadMyInfo();
     _watchLatestMessage();
+    FirebaseFirestore.instance
+        .collection('events')
+        .doc(widget.eventId)
+        .get()
+        .then((d) {
+      if (mounted) setState(() => _organizerUid = d.data()?['organizerUid'] as String?);
+    }).catchError((_) {});
   }
 
   // 一番新しいメッセージが変わるたびに「ここまで読んだ」を更新する。
@@ -119,18 +159,45 @@ class _EventChatPageState extends State<EventChatPage> {
   void _sendMessage(String text) async {
     text = text.trim();
     if (text.isEmpty || text.length > _messageMaxLength) return;
+    _msgCtrl.clear();
+    await _send({'text': text});
+  }
+
+  void _sendStamp(String emoji, String label) async {
+    setState(() => _showStamps = false);
+    await _send({'type': 'stamp', 'emoji': emoji, 'text': '$emoji $label'});
+  }
+
+  Future<void> _sendPhoto() async {
+    if (_uploading) return;
+    setState(() => _uploading = true);
+    final url = await CloudinaryService.pickAndUploadImage();
+    if (!mounted) return;
+    setState(() => _uploading = false);
+    if (url == null) return;
+    await _send({'type': 'image', 'imageUrl': url, 'text': '📷 写真'});
+  }
+
+  Future<void> _send(Map<String, dynamic> body) async {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;
 
-    await _messagesRef.add({
-      'text': text,
-      'senderUid': myUid,
-      'senderName': _myName ?? '',
-      'senderImageUrl': _myImageUrl ?? '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _messagesRef.add({
+        ...body,
+        'senderUid': myUid,
+        'senderName': _myName ?? '',
+        'senderImageUrl': _myImageUrl ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('送れませんでした。電波を確かめて、もう一度送ってください')));
+      }
+      return;
+    }
 
-    _msgCtrl.clear();
     final participants = await FirebaseFirestore.instance
         .collection('events')
         .doc(widget.eventId)
@@ -185,17 +252,94 @@ class _EventChatPageState extends State<EventChatPage> {
     });
   }
 
+  // リアクションをつける・外す（もう一度押すと外れる）
+  Future<void> _toggleReaction(String messageId, String key, bool mine) async {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (myUid == null) return;
+    try {
+      await _messagesRef.doc(messageId).update({
+        FieldPath(['reactions', key]):
+            mine ? FieldValue.arrayRemove([myUid]) : FieldValue.arrayUnion([myUid]),
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('リアクションをつけられませんでした')));
+      }
+    }
+  }
+
+  // 主催者だけ：大事なメッセージを、上にピン留めする
+  Future<void> _pin(String text, String senderName) async {
+    try {
+      await FirebaseFirestore.instance.collection('events').doc(widget.eventId).update({
+        'pinned': {'text': text, 'senderName': senderName, 'at': FieldValue.serverTimestamp()},
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ピン留めできませんでした')));
+      }
+    }
+  }
+
   void _showMessageMenu(
     BuildContext context, {
     required String messageId,
     required String senderUid,
     required String senderName,
     required String text,
+    required Map<String, dynamic> reactions,
   }) {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    final isMe = senderUid == myUid;
+    final isOrganizer = myUid != null && myUid == _organizerUid;
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (sheetContext) => SafeArea(
-        child: ListTile(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: _reactions.map((r) {
+                  final list = (reactions[r.$1] as List?) ?? const [];
+                  final mine = list.contains(myUid);
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _toggleReaction(messageId, r.$1, mine);
+                    },
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: mine ? const Color(0xFFFFE9DF) : Colors.grey[100],
+                        shape: BoxShape.circle,
+                        border: Border.all(color: mine ? _orange : Colors.transparent),
+                      ),
+                      child: Text(r.$2, style: const TextStyle(fontSize: 26)),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            if (isOrganizer)
+              ListTile(
+                leading: const Icon(Icons.push_pin_outlined, color: _orange),
+                title: const Text('上にピン留めする（主催者だけ）'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pin(text, senderName);
+                },
+              ),
+            if (!isMe)
+        ListTile(
           leading: const Icon(Icons.flag_outlined, color: Colors.red),
           title: const Text('このメッセージを通報'),
           onTap: () {
@@ -214,6 +358,142 @@ class _EventChatPageState extends State<EventChatPage> {
             );
           },
         ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // スタンプ：吹き出しなしで、大きく、ぽんっと出る
+  Widget _stampView(Map<String, dynamic> data) {
+    final text = data['text'] as String? ?? '';
+    final emoji = data['emoji'] as String? ?? '🐾';
+    final label = text.startsWith(emoji) ? text.substring(emoji.length).trim() : text;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.4, end: 1),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.elasticOut,
+      builder: (_, v, child) => Transform.scale(scale: v, child: child),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF1EA),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFF6D5C6)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 44)),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.bold, color: _brown)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 写真：押すと大きく見られる
+  Widget _imageView(String url) {
+    final w = MediaQuery.of(context).size.width * 0.6;
+    return GestureDetector(
+      onTap: () => showDialog(
+        context: context,
+        builder: (_) => GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: InteractiveViewer(child: Image.network(url)),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.network(
+          url,
+          width: w,
+          fit: BoxFit.cover,
+          loadingBuilder: (_, child, p) => p == null
+              ? child
+              : Container(
+                  width: w,
+                  height: w * 0.75,
+                  color: const Color(0xFFFFEFE6),
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(color: _orange, strokeWidth: 2)),
+          errorBuilder: (_, __, ___) => Container(
+              width: w,
+              height: 80,
+              color: Colors.grey[200],
+              alignment: Alignment.center,
+              child: const Text('写真を読みこめませんでした', style: TextStyle(fontSize: 12))),
+        ),
+      ),
+    );
+  }
+
+  // 吹き出しの下に出る、リアクションの数（押すと自分の分をつける・外す）
+  Widget _reactionChips(String messageId, Map<String, dynamic> reactions, bool isMe) {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    final chips = <Widget>[];
+    for (final r in _reactions) {
+      final list = (reactions[r.$1] as List?) ?? const [];
+      if (list.isEmpty) continue;
+      final mine = list.contains(myUid);
+      chips.add(GestureDetector(
+        onTap: () => _toggleReaction(messageId, r.$1, mine),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: mine ? const Color(0xFFFFE9DF) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: mine ? _orange : const Color(0xFFEDE3DD)),
+          ),
+          child: Text('${r.$2} ${list.length}',
+              style: const TextStyle(fontSize: 12, color: _brown)),
+        ),
+      ));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: chips),
+    );
+  }
+
+  Widget _stampPanel() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GridView.count(
+        crossAxisCount: 4,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
+        childAspectRatio: 1.15,
+        children: _stamps.map((st) {
+          return InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => _sendStamp(st.$1, st.$2),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4EE),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(st.$1, style: const TextStyle(fontSize: 26)),
+                  const SizedBox(height: 2),
+                  Text(st.$2,
+                      style: const TextStyle(fontSize: 10, color: _brown),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -263,7 +543,9 @@ class _EventChatPageState extends State<EventChatPage> {
                       child: CircularProgressIndicator(
                           color: Color(0xFFE8845A)));
                 }
-                final messages = snapshot.data!.docs;
+                final messages = snapshot.data!.docs
+                    .where((m) => !BlockedUsers.instance.isBlocked(m.data()['senderUid']))
+                    .toList();
                 if (messages.isEmpty) {
                   return const Center(
                     child: Column(
@@ -317,7 +599,11 @@ class _EventChatPageState extends State<EventChatPage> {
                       );
                     }
 
+                    final type = data['type'] as String? ?? 'text';
+                    final reactions =
+                        (data['reactions'] as Map<String, dynamic>?) ?? const {};
                     return Padding(
+                      key: ValueKey(messageId),
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
                         mainAxisAlignment: isMe
@@ -383,10 +669,8 @@ class _EventChatPageState extends State<EventChatPage> {
                                           color: Colors.grey[600])),
                                 ),
                               GestureDetector(
-                                // 他の人のメッセージを長押しすると、通報できる
-                                onLongPress: isMe
-                                    ? null
-                                    : () => _showMessageMenu(
+                                // 長押し：リアクション・ピン留め（主催者）・通報（ほかの人のメッセージ）
+                                onLongPress: () => _showMessageMenu(
                                           context,
                                           messageId: messageId,
                                           senderUid:
@@ -394,8 +678,13 @@ class _EventChatPageState extends State<EventChatPage> {
                                           senderName:
                                               data['senderName'] as String? ?? '',
                                           text: data['text'] as String? ?? '',
+                                          reactions: reactions,
                                         ),
-                                child: Container(
+                                child: type == 'stamp'
+                                    ? _stampView(data)
+                                    : type == 'image' && (data['imageUrl'] as String? ?? '').isNotEmpty
+                                        ? _imageView(data['imageUrl'] as String)
+                                        : Container(
                                 constraints: BoxConstraints(
                                     maxWidth:
                                     MediaQuery.of(context).size.width *
@@ -431,6 +720,7 @@ class _EventChatPageState extends State<EventChatPage> {
                                         height: 1.4)),
                               ),
                               ),
+                              _reactionChips(messageId, reactions, isMe),
                               const SizedBox(height: 4),
                               Text(timeStr,
                                   style: TextStyle(
@@ -457,8 +747,36 @@ class _EventChatPageState extends State<EventChatPage> {
                     offset: const Offset(0, -2))
               ],
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  child: _showStamps ? _stampPanel() : const SizedBox(width: double.infinity),
+                ),
+                Row(
+              children: [
+                IconButton(
+                  tooltip: 'スタンプ',
+                  onPressed: () => setState(() => _showStamps = !_showStamps),
+                  icon: AnimatedRotation(
+                    turns: _showStamps ? 0.1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(Icons.pets_rounded,
+                        color: _showStamps ? _orange : Colors.grey[500]),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '写真を送る',
+                  onPressed: _uploading ? null : _sendPhoto,
+                  icon: _uploading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _orange))
+                      : Icon(Icons.photo_camera_outlined, color: Colors.grey[500]),
+                ),
                 Expanded(
                   child: TextField(
                     controller: _msgCtrl,
@@ -498,6 +816,8 @@ class _EventChatPageState extends State<EventChatPage> {
                 ),
               ],
             ),
+              ],
+            ),
           ),
         ],
       ),
@@ -520,6 +840,9 @@ class _EventInfoBar extends StatelessWidget {
         final e = snap.data?.data() ?? const <String, dynamic>{};
         final date = e['date'] as String? ?? '';
         final location = e['location'] as String? ?? '';
+        final pinned = e['pinned'] as Map<String, dynamic>?;
+        final isOrganizer = FirebaseAuth.instance.currentUser?.uid != null &&
+            FirebaseAuth.instance.currentUser?.uid == e['organizerUid'];
         return Container(
           width: double.infinity,
           margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
@@ -546,8 +869,42 @@ class _EventInfoBar extends StatelessWidget {
                   ),
                 ],
               ),
+              if (pinned != null && (pinned['text'] as String? ?? '').isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4E0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.push_pin_rounded, size: 16, color: Color(0xFFE0A030)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(pinned['text'] as String,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF3D2B1F), height: 1.4)),
+                      ),
+                      if (isOrganizer)
+                        GestureDetector(
+                          onTap: () => eventRef
+                              .update({'pinned': FieldValue.delete()})
+                              .catchError((_) {}),
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 6),
+                            child: Icon(Icons.close_rounded, size: 16, color: Colors.grey),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
-              Text('やさしい言葉で話そう。困ったメッセージは、長押しで通報できます。',
+              Text('長押しでリアクション。困ったメッセージは、長押しで通報できます。',
                   style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             ],
           ),
