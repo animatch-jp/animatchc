@@ -210,6 +210,10 @@ Widget build(BuildContext context) {
   final prefecture = _userData!['prefecture'] ?? '';
   final animal = _userData!['animal'] ?? '';
   final bio = _userData!['bio'] ?? '';
+  final motto = (_userData!['motto'] as String?)?.trim() ?? '';
+  final relation = (_userData!['relation'] as String?)?.trim() ?? '';
+  final interests = _strings(_userData!['interests']);
+  final spots = _strings(_userData!['spots']);
 
   return Scaffold(
     backgroundColor: const Color(0xFFFFF8F5),
@@ -267,6 +271,19 @@ Widget build(BuildContext context) {
                 const SizedBox(height: 4),
                 Text('$animal好き',
                     style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                if (motto.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8F5),
+                        borderRadius: BorderRadius.circular(16)),
+                    child: Text('💬 $motto',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF3D2B1F), height: 1.5)),
+                  ),
+                ],
               ],
             ),
           ),
@@ -278,6 +295,19 @@ Widget build(BuildContext context) {
                     color: bio.isNotEmpty ? const Color(0xFF3D2B1F) : Colors.grey,
                     height: 1.6)),
           ),
+          if (relation.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildSection('動物との関わり方',
+                _chips([relation], _relationEmoji, highlight: true)),
+          ],
+          if (interests.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildSection('好きなこと 🐾', _chips(interests, _interestEmoji)),
+          ],
+          if (spots.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildSection('よく行く場所 📍', _chips(spots, _spotEmoji)),
+          ],
           const SizedBox(height: 16),
           _buildSection('🐾 ペット情報',
             _pets.isEmpty
@@ -358,6 +388,53 @@ Widget build(BuildContext context) {
         ],
       ),
     ),
+  );
+}
+
+// プロフィールの編集で選べるものと同じ（絵文字をつけて見せる）
+static const Map<String, String> _relationEmoji = {
+  '飼ってる': '🏠', '見るのが好き': '👀', 'ガチ勢': '🔥', 'これから飼いたい': '🌱',
+};
+static const Map<String, String> _interestEmoji = {
+  '動物系YouTube鑑賞': '📺', '動物園・水族館巡り': '🦁', '猫カフェ巡り': '☕',
+  'ペット用品集め': '🧸', '動物の写真を撮る': '📷', '動物の本を読む': '📚',
+};
+static const Map<String, String> _spotEmoji = {
+  '動物園': '🦁', '水族館': '🐠', '猫カフェ': '🐱',
+  'ドッグラン': '🐕', '散歩コース': '🚶', 'ペットショップ': '🛍️',
+};
+
+// 文字のリストだけを取り出す（形がちがうデータでも落ちないように）
+static List<String> _strings(dynamic v) {
+  if (v is! List) return const [];
+  return v
+      .whereType<String>()
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .take(20)
+      .toList();
+}
+
+Widget _chips(List<String> items, Map<String, String> emoji,
+    {bool highlight = false}) {
+  return Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: items.map((it) {
+      final e = emoji[it];
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+            color: highlight
+                ? const Color(0xFFE8845A)
+                : const Color(0xFFE8845A).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20)),
+        child: Text(e == null ? it : '$e $it',
+            style: TextStyle(
+                fontSize: 13,
+                color: highlight ? Colors.white : const Color(0xFF3D2B1F))),
+      );
+    }).toList(),
   );
 }
 
