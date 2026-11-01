@@ -1,4 +1,5 @@
 import 'profile_setup_page.dart';
+import '../widgets/animaru_guide.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -172,6 +173,11 @@ class _RegisterPageState extends State<RegisterPage> {
                       style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
                   const Text('Find Your Wild Connection',
                       style: TextStyle(fontSize: 13, color: Colors.white70)),
+                  const SizedBox(height: 18),
+                  const AnimaruGuide(
+                    step: 0,
+                    message: 'はじめまして、あにまるだよ！\nまずはアカウントを作ろう',
+                  ),
                 ],
               ),
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_guide.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/cloudinary_service.dart';
@@ -164,19 +165,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('プロフィール設定',
-
-
                       style: TextStyle(fontSize: 28,
                           fontWeight: FontWeight.w900,
                           color: Colors.white)),
-                  SizedBox(height: 8),
-                  Text('STEP 1 / 2',
-                      style: TextStyle(fontSize: 13,
-                          color: Colors.white70)),
-                  SizedBox(height: 4),
-                  Text('基本情報を教えてください🐾',
-                      style: TextStyle(fontSize: 13,
-                          color: Colors.white70)),
+                  SizedBox(height: 14),
+                  AnimaruGuide(
+                    step: 1,
+                    message: 'きみのことを教えてね。\n写真とニックネームから！',
+                  ),
                 ],
               ),
             ),

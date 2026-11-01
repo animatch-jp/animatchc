@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_guide.dart';
+import 'welcome_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
-import 'root_page.dart';
 
 class _PetDraft {
   String name;
@@ -39,7 +40,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
   void _skip() {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const RootPage()),
+      MaterialPageRoute(builder: (_) => const WelcomePage()),
           (route) => false,
     );
   }
@@ -92,7 +93,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const RootPage()),
+        MaterialPageRoute(builder: (_) => WelcomePage(petCount: _pets.length)),
             (route) => false,
       );
     } catch (e) {
@@ -111,7 +112,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
-          'STEP 3 / 3',
+          'さいごのステップ',
           style: TextStyle(
               color: Color(0xFF3D2B1F), fontWeight: FontWeight.bold),
         ),
@@ -134,6 +135,20 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE8845A), Color(0xFFF4A261)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const AnimaruGuide(
+                      step: 3,
+                      message: 'うちの子を紹介してね！\nいない人は「スキップ」でOK',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   const Text(
                     'ペットを登録しよう🐾',
                     style: TextStyle(

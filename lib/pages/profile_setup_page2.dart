@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'root_page.dart';
@@ -163,14 +164,11 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
                           fontSize: 28,
                           fontWeight: FontWeight.w900,
                           color: Colors.white)),
-                  SizedBox(height: 8),
-                  Text('STEP 2 / 2',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.white70)),
-                  SizedBox(height: 4),
-                  Text('あなたのことをもっと教えてください🐾',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.white70)),
+                  SizedBox(height: 14),
+                  AnimaruGuide(
+                    step: 2,
+                    message: 'あと少し！\n動物との関わり方を教えてね',
+                  ),
                 ],
               ),
             ),

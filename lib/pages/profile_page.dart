@@ -533,6 +533,13 @@ class _ProfilePageState extends State<ProfilePage> {
                     Row(
                       children: [
                         _BadgeItem(
+                          emoji: '🐾',
+                          label: 'はじめの\n一歩',
+                          sublabel: '登録できた',
+                          earned: _earnedBadges.contains('はじめの一歩'),
+                        ),
+                        const SizedBox(width: 16),
+                        _BadgeItem(
                           emoji: '🏅',
                           label: 'うちの子\nお題マスター',
                           sublabel: 'うちの子系(30個)',
