@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'question_board_page.dart';
 import 'event_chat_page.dart';
+import 'pet_brag_page.dart' show showPostDetail;
 import 'user_profile_page.dart';
 
 const _brown = Color(0xFF3D2B1F);
@@ -28,7 +29,8 @@ String? reportedContentPath(dynamic comment) {
   if (path == null) return null;
   const id = r'[A-Za-z0-9_-]+';
   final allowed = RegExp('^questions/$id(/answers/$id)?\$').hasMatch(path) ||
-      RegExp('^events/$id/messages/$id\$').hasMatch(path);
+      RegExp('^events/$id/messages/$id\$').hasMatch(path) ||
+      RegExp('^petBrags/$id/comments/$id\$').hasMatch(path);
   return allowed ? path : null;
 }
 
@@ -38,7 +40,7 @@ String? reportContentLabel(dynamic comment) {
   final m = RegExp(r'^\[([^\]]+)\]').firstMatch(comment as String);
   final label = m?.group(1);
   if (label == null) return null;
-  if (label.contains('チャット')) return '💬 $label';
+  if (label.contains('チャット') || label.contains('コメント')) return '💬 $label';
   return '📝 $label';
 }
 
@@ -263,9 +265,14 @@ class ReportedContentCard extends StatelessWidget {
   const ReportedContentCard({super.key, required this.path, this.reportId});
 
   bool get _isMessage => path.startsWith('events/');
+  bool get _isPetComment => path.startsWith('petBrags/');
   String get _firstId => path.split('/')[1];
 
   Future<void> _open(BuildContext context) async {
+    if (_isPetComment) {
+      showPostDetail(context, _firstId);
+      return;
+    }
     if (_isMessage) {
       final eventDoc = await FirebaseFirestore.instance.collection('events').doc(_firstId).get();
       if (!context.mounted) return;
@@ -310,6 +317,15 @@ class ReportedContentCard extends StatelessWidget {
     if (confirm != true) return;
     try {
       await FirebaseFirestore.instance.doc(path).delete();
+      if (_isPetComment) {
+        // コメントの数も1つ減らす（できなくても削除は終わっている）
+        try {
+          await FirebaseFirestore.instance
+              .collection('petBrags')
+              .doc(_firstId)
+              .update({'commentCount': FieldValue.increment(-1)});
+        } catch (_) {}
+      }
       await logReportAction(reportId, 'delete_post');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

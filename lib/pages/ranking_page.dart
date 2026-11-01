@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/blocked_users.dart';
 import 'pet_brag_page.dart' show showPostDetail;
 
 // 週間ランキング
@@ -156,6 +157,7 @@ class _WeeklyRankingViewState extends State<WeeklyRankingView>
   List<_Entry> _rank(Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
     final list = docs
         .where((d) => _inGroup(d.data()))
+        .where((d) => !BlockedUsers.instance.isBlocked(d.data()['uid']))
         .map((d) => _Entry(d.id, d.data(), _score(d.data())))
         .toList();
     list.sort((a, b) {

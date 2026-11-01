@@ -9,6 +9,8 @@ import 'hospital_tags.dart';
 import 'notification_prefs.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'ranking_page.dart';
+import 'report_page.dart';
+import '../services/blocked_users.dart';
 
 
 
@@ -622,7 +624,10 @@ class _PetBragListState extends State<_PetBragList> {
               return const Center(
                   child: CircularProgressIndicator(color: Color(0xFFE8845A)));
             }
-            var docs = snapshot.data!.docs.toList();
+            var docs = snapshot.data!.docs
+                .where((d) => !BlockedUsers.instance
+                    .isBlocked((d.data() as Map<String, dynamic>)['uid']))
+                .toList();
             if (_animalFilter != null) {
               docs = docs
                   .where((d) =>
@@ -929,7 +934,10 @@ class _CommentList extends StatelessWidget {
             child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
           );
         }
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data!.docs
+            .where((d) => !BlockedUsers.instance
+                .isBlocked((d.data() as Map<String, dynamic>)['uid']))
+            .toList();
         if (docs.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -966,8 +974,26 @@ class _CommentList extends StatelessWidget {
                       child: const Icon(Icons.close, size: 16, color: Colors.grey),
                     )
                   else if (isPostOwner)
+                    // 投稿した本人：通報して、自分の投稿からコメントを消せる
                     GestureDetector(
                       onTap: () => _reportComment(context, doc.id, data['uid'] ?? ''),
+                      child: const Icon(Icons.flag_outlined, size: 16, color: Colors.grey),
+                    )
+                  else if (myUid != null)
+                    // ほかの人：通報だけできる（消すのは運営）
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReportPage(
+                            userName: (data['name'] ?? '') as String,
+                            targetUid: (data['uid'] ?? '') as String,
+                            contentLabel: 'ペット自慢のコメント',
+                            contentRef: 'petBrags/$postId/comments/${doc.id}',
+                            contentText: (data['text'] ?? '') as String,
+                          ),
+                        ),
+                      ),
                       child: const Icon(Icons.flag_outlined, size: 16, color: Colors.grey),
                     ),
                 ],
@@ -993,6 +1019,9 @@ class _CommentInputBar extends StatefulWidget {
   State<_CommentInputBar> createState() => _CommentInputBarState();
 }
 
+// コメントの文字数の上限
+const _commentMaxLength = 200;
+
 class _CommentInputBarState extends State<_CommentInputBar> {
   final _commentCtrl = TextEditingController();
   bool _isSending = false;
@@ -1006,6 +1035,11 @@ class _CommentInputBarState extends State<_CommentInputBar> {
   Future<void> _sendComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
+    if (text.length > _commentMaxLength) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('コメントは$_commentMaxLength文字までです')));
+      return;
+    }
 
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;
@@ -1069,7 +1103,9 @@ class _CommentInputBarState extends State<_CommentInputBar> {
             Expanded(
               child: TextField(
                 controller: _commentCtrl,
+                maxLength: _commentMaxLength,
                 decoration: InputDecoration(
+                  counterText: '',
                   hintText: 'コメントする',
                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
@@ -1209,7 +1245,10 @@ class _RecommendedListState extends State<_RecommendedList> {
               child: CircularProgressIndicator(color: Color(0xFFE8845A)));
         }
 
-        final docs = snapshot.data!.docs;
+        final docs = snapshot.data!.docs
+            .where((d) => !BlockedUsers.instance
+                .isBlocked((d.data() as Map<String, dynamic>)['uid']))
+            .toList();
         final docsById = {for (final d in docs) d.id: d};
 
         if (_shuffledOrder == null || _shuffledOrder!.length != docs.length) {
@@ -2145,7 +2184,10 @@ class _MonthlyBestList extends StatelessWidget {
           return const Center(
               child: CircularProgressIndicator(color: Color(0xFFE8845A)));
         }
-        var docs = snapshot.data!.docs.toList();
+        var docs = snapshot.data!.docs
+            .where((d) => !BlockedUsers.instance
+                .isBlocked((d.data() as Map<String, dynamic>)['uid']))
+            .toList();
         docs.sort((a, b) {
           final aVotes = (a.data() as Map<String, dynamic>)['voteCount'] ?? 0;
           final bVotes = (b.data() as Map<String, dynamic>)['voteCount'] ?? 0;
