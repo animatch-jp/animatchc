@@ -2,6 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── v10（2026-11-01）：ブロックを悪用されないようにした。だれがだれをブロックしたかを、ほかの人が見られない。
+    //    ブロックされた人は、1対1のチャットにメッセージを送れない。チャットのメッセージは、送り主を偽れない・他人のメッセージを書きかえられない ──
     // ── v9（2026-11-01）：ペット自慢の票を、1人1票より多く増やせないようにした ──
     // ── v8（2026-11-01）：運営（admins）ができることを足し、イベントのチャットを安全にした ──
 
@@ -150,20 +152,63 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
+    // 1対1のチャット（チャットのIDは、2人のuidを並べて _ でつないだもの）に、自分が入っているか
+    function inChat(chatId) {
+      return request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+    }
+    // 相手にブロックされていないか（自分で自分はブロックできないので、2人とも調べてよい）
+    function notBlockedInChat(chatId) {
+      let p = chatId.split('_');
+      return p.size() == 2
+        && !exists(/databases/$(database)/documents/blocks/$(p[0])/blocked/$(request.auth.uid))
+        && !exists(/databases/$(database)/documents/blocks/$(p[1])/blocked/$(request.auth.uid));
+    }
     match /chats/{chatId} {
-      allow get: if request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+      allow get: if inChat(chatId);
       allow list: if request.auth != null && request.auth.uid in resource.data.participants;
-      allow create, update, delete: if request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+      // 新しく作るのと、最後のメッセージを書きかえるのは、ブロックされていないときだけ
+      // （開いたときに自分の未読を0にするのは、ブロックされていてもできる）
+      allow create: if inChat(chatId) && notBlockedInChat(chatId);
+      allow update: if inChat(chatId) && (
+        notBlockedInChat(chatId) ||
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['lastMessage', 'lastMessageAt', 'lastSenderId', 'participants'])
+      );
+      allow delete: if inChat(chatId);
       match /messages/{messageId} {
-        allow read, write: if request.auth != null && chatId.split('_').hasAny([request.auth.uid]);
+        allow read: if inChat(chatId);
+        // 送り主は自分だけ。文字は1000字まで。相手にブロックされていたら送れない
+        allow create: if inChat(chatId)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 1000
+          && notBlockedInChat(chatId);
+        // 書きかえは「読んだ」の印だけ。相手のメッセージにだけつけられる
+        allow update: if inChat(chatId)
+          && resource.data.senderId != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        // アカウントを消すときに、チャットごと消すため
+        allow delete: if inChat(chatId);
       }
     }
     match /blocks/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // 親の文書は、アカウントを消すときに消すだけ
+      allow delete: if request.auth != null && request.auth.uid == userId;
       match /blocked/{blockedId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        // 自分のブロックの一覧は自分だけ。1件ずつなら、ブロックされた本人も
+        // 「自分がブロックされているか」だけ確かめられる（チャットやプロフィールで使う）。運営も見られる
+        allow list: if request.auth != null && request.auth.uid == userId;
+        allow get: if request.auth != null && (
+          request.auth.uid == userId || request.auth.uid == blockedId || isAdmin()
+        );
+        // ブロックするのは自分だけ。自分自身はブロックできない。中身は日時だけ
+        allow create, update: if request.auth != null
+          && request.auth.uid == userId
+          && blockedId != userId
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time;
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
     }
     match /reports/{reportId} {

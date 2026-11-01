@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'animal_map_page.dart' show showHospitalDetail;
+import 'organization_profile_page.dart';
+import 'user_profile_page.dart';
 
 class BlockListPage extends StatefulWidget {
   const BlockListPage({super.key});
@@ -59,6 +62,7 @@ class _BlockListPageState extends State<BlockListPage> {
             'name': h.data()?['name'] ?? '',
             'profileImageUrl': h.data()?['imageUrl'] ?? '',
             'kind': '動物病院',
+            'data': h.data() ?? <String, dynamic>{},
           };
         }
       } catch (_) {}
@@ -74,6 +78,25 @@ class _BlockListPageState extends State<BlockListPage> {
         _isLoading = false;
       });
     }
+  }
+
+  void _open(Map<String, dynamic> item) {
+    final id = item['uid'] as String;
+    final kind = item['kind'] as String? ?? '';
+    if (kind == '動物病院') {
+      showHospitalDetail(
+          context, id, (item['data'] as Map<String, dynamic>?) ?? {});
+      return;
+    }
+    if (item['name'] == '（見つからないアカウント）') return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => kind == '団体'
+            ? OrganizationProfilePage(orgId: id)
+            : UserProfilePage(uid: id),
+      ),
+    );
   }
 
   Future<void> _unblock(String uid) async {
@@ -182,6 +205,8 @@ class _BlockListPageState extends State<BlockListPage> {
                   child: Text('🐾',
                       style: TextStyle(fontSize: 24))),
             ),
+            // 押すと、その人・団体・病院のページを見られる（ブロックしたままでも見られる）
+            onTap: () => _open(user),
             title: Text(user['name'],
                 style: const TextStyle(
                     fontWeight: FontWeight.bold)),

@@ -192,7 +192,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendMessage(String text) async {
     final body = text.trim();
-    if (body.isEmpty) return;
+    if (body.isEmpty || body.length > 1000) return;
     if (ContentFilter.blocked(context, [body], allowContact: true)) return;
     if (_isBlocked || _isBlockedBy || _isSending) return;
     final myUid = FirebaseAuth.instance.currentUser?.uid;
@@ -905,7 +905,9 @@ class _ChatPageState extends State<ChatPage> {
                   child: TextField(
                     controller: _msgCtrl,
                     enabled: !blockedAny,
+                    maxLength: 1000,
                     decoration: InputDecoration(
+                      counterText: '',
                       hintText: _isBlocked
                           ? 'ブロック中のためメッセージを送れません'
                           : _isBlockedBy
