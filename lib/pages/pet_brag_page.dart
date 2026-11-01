@@ -456,17 +456,26 @@ Future<void> vote(BuildContext context, String postId, String voteType) async {
     return;
   }
 
-  await FirebaseFirestore.instance
-      .collection('petBrags')
-      .doc(postId)
-      .collection('voters')
-      .doc(myUid)
-      .set({'voteType': voteType, 'createdAt': FieldValue.serverTimestamp()});
-
-  await FirebaseFirestore.instance.collection('petBrags').doc(postId).update({
+  // 「投票した記録」と「票を1つ増やす」を、いっしょに書く。
+  // ルールで、記録といっしょのときだけ票を増やせるようにして、何回も増やすズルを防ぐ。
+  final postRef = FirebaseFirestore.instance.collection('petBrags').doc(postId);
+  final batch = FirebaseFirestore.instance.batch();
+  batch.set(postRef.collection('voters').doc(myUid),
+      {'voteType': voteType, 'createdAt': FieldValue.serverTimestamp()});
+  batch.update(postRef, {
     'votes.$voteType': FieldValue.increment(1),
     'voteCount': FieldValue.increment(1),
   });
+  try {
+    await batch.commit();
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('投票できませんでした。もう一度ためしてください')),
+      );
+    }
+    return;
+  }
 
   final postDoc = await FirebaseFirestore.instance.collection('petBrags').doc(postId).get();
   final postData = postDoc.data();
