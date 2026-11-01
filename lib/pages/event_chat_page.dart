@@ -82,7 +82,7 @@ class _EventChatPageState extends State<EventChatPage> {
     _messageStream =
         _messagesRef.orderBy('createdAt', descending: true).snapshots();
     _loadMyInfo();
-    _watchLatestMessage();
+    _openFirstTime();
     FirebaseFirestore.instance
         .collection('events')
         .doc(widget.eventId)
@@ -90,6 +90,151 @@ class _EventChatPageState extends State<EventChatPage> {
         .then((d) {
       if (mounted) setState(() => _organizerUid = d.data()?['organizerUid'] as String?);
     }).catchError((_) {});
+  }
+
+  // はじめてこのチャットを開いたとき（まだ「ここまで読んだ」がない）は、
+  // あにまるが、このチャットでできることを案内する。そのあと既読の更新を始める。
+  Future<void> _openFirstTime() async {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    var first = false;
+    if (myUid != null) {
+      try {
+        final seen = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(myUid)
+            .collection('groupChatLastSeen')
+            .doc(widget.eventId)
+            .get();
+        first = !seen.exists;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    _watchLatestMessage();
+    if (first) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showGuide();
+      });
+    }
+  }
+
+  // このチャットでできることの一覧（右上の「？」からも見られる）
+  void _showGuide() {
+    const items = <(IconData, String, String)>[
+      (Icons.pets_rounded, 'スタンプ', '下の肉球のボタンから、動物のスタンプを送れるよ'),
+      (Icons.photo_camera_outlined, '写真', '下のカメラのボタンから、写真を送れるよ'),
+      (Icons.favorite_border_rounded, 'リアクション', 'メッセージを長押しすると、🐾😍😂👍🙏 で気持ちを返せるよ'),
+      (Icons.push_pin_outlined, 'ピン留め', '企画した人は、大事なメッセージを長押しして、いちばん上に出しておけるよ'),
+      (Icons.how_to_vote_outlined, '投票', '右上の投票のボタンから、日にちなどをみんなで決められるよ'),
+      (Icons.photo_library_outlined, '思い出アルバム', '右上のアルバムのボタンで、送られた写真をまとめて見られるよ'),
+    ];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Animaru(size: 72, wave: true, showName: true),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 30),
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1EA),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
+                          bottomLeft: Radius.circular(4),
+                        ),
+                      ),
+                      child: const Text(
+                        'このチャットで、できることを教えるね！',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: _brown,
+                            height: 1.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...items.map((it) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                              color: Color(0xFFFFE9DF), shape: BoxShape.circle),
+                          child: Icon(it.$1, color: _orange, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(it.$2,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: _brown)),
+                              const SizedBox(height: 2),
+                              Text(it.$3,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[700],
+                                      height: 1.5)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: 4),
+              Text('この案内は、右上の「？」からいつでも見られるよ',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('チャットをはじめる',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // 一番新しいメッセージが変わるたびに「ここまで読んだ」を更新する。
@@ -706,6 +851,11 @@ class _EventChatPageState extends State<EventChatPage> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'このチャットでできること',
+            onPressed: _showGuide,
+            icon: const Icon(Icons.help_outline_rounded, color: _brown),
+          ),
           IconButton(
             tooltip: '日にちなどの投票を作る',
             onPressed: _createPoll,
