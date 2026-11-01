@@ -380,7 +380,7 @@ class _SplashPageState extends State<SplashPage>
                       opacity: _part(0.6, 0.75),
                       child: Transform.translate(
                         offset: Offset(0, 30 * (1 - _part(0.6, 0.9, curve: Curves.elasticOut))),
-                        child: const Animaru(size: 110, wave: true),
+                        child: const Animaru(size: 110, wave: true, showName: true),
                       ),
                     ),
                     const SizedBox(height: 4),

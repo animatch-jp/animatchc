@@ -55,7 +55,7 @@ class HospitalPendingPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Animaru(size: 120, mood: AnimaruMood.sad),
+                      const Animaru(size: 120, mood: AnimaruMood.sad, showName: true),
                       const SizedBox(height: 20),
                       const Text('申請は承認されませんでした',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -84,7 +84,7 @@ class HospitalPendingPage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Animaru(size: 120, wave: true),
+                    const Animaru(size: 120, wave: true, showName: true),
                     const SizedBox(height: 20),
                     const Text('審査中です', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 12),

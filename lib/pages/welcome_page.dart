@@ -109,7 +109,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                         offset: Offset(0, 60 * (1 - _part(0, 0.5, Curves.elasticOut))),
                         child: Opacity(
                           opacity: _part(0, 0.2),
-                          child: const Animaru(size: 170, wave: true),
+                          child: const Animaru(size: 170, wave: true, showName: true),
                         ),
                       ),
                       const SizedBox(height: 16),

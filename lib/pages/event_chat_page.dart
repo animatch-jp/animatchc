@@ -552,7 +552,7 @@ class _EventChatPageState extends State<EventChatPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Animaru(size: 100, wave: true),
+                        Animaru(size: 100, wave: true, showName: true),
                         SizedBox(height: 16),
                         Text('まだメッセージがありません',
                             style: TextStyle(

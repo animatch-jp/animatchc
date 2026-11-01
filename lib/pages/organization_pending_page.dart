@@ -60,7 +60,7 @@ class OrganizationPendingPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Animaru(size: 120, mood: AnimaruMood.sad),
+                        const Animaru(size: 120, mood: AnimaruMood.sad, showName: true),
 
 
                         const SizedBox(height: 20),
@@ -94,7 +94,7 @@ class OrganizationPendingPage extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Animaru(size: 120, wave: true),
+                      const Animaru(size: 120, wave: true, showName: true),
 
 
                       const SizedBox(height: 20),

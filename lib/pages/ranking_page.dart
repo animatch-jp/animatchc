@@ -485,7 +485,7 @@ class _WeeklyRankingViewState extends State<WeeklyRankingView>
       padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
       child: Column(
         children: [
-          const Animaru(size: 110),
+          const Animaru(size: 110, showName: true),
           const SizedBox(height: 12),
           Text(
             g.types == null

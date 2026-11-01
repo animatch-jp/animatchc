@@ -18,7 +18,10 @@ class Animaru extends StatefulWidget {
     this.moving = true,
     this.wave = false,
     this.mood = AnimaruMood.normal,
+    this.showName = false,
   });
+  // true なら、絵の下に名前「あにまる」を出す
+  final bool showName;
   final double size;
   final bool moving;
   final bool wave;
@@ -53,20 +56,34 @@ class _AnimaruState extends State<Animaru> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final art = SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => CustomPaint(
+          painter: _AnimaruPainter(
+              t: widget.moving ? _c.value : 0, wave: widget.wave, mood: widget.mood),
+        ),
+      ),
+    );
     return Semantics(
       label: 'あにまる',
       image: true,
-      child: SizedBox(
-        width: widget.size,
-        height: widget.size,
-        child: AnimatedBuilder(
-          animation: _c,
-          builder: (_, __) => CustomPaint(
-            painter: _AnimaruPainter(
-                t: widget.moving ? _c.value : 0, wave: widget.wave, mood: widget.mood),
-          ),
-        ),
-      ),
+      child: !widget.showName
+          ? art
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                art,
+                Text('あにまる',
+                    style: TextStyle(
+                        fontSize: (widget.size * 0.13).clamp(10.0, 18.0),
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                        color: const Color(0xFFE8845A))),
+              ],
+            ),
     );
   }
 }

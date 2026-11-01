@@ -30,6 +30,9 @@ class AnimaruGuide extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             // オレンジの背景でも見えるように、白い丸の上に立たせる
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
             Container(
               width: 84,
               height: 84,
@@ -39,6 +42,15 @@ class AnimaruGuide extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: Animaru(size: 72, wave: mood == AnimaruMood.normal, mood: mood),
+            ),
+                const SizedBox(height: 3),
+                const Text('あにまる',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                        color: Colors.white)),
+              ],
             ),
             const SizedBox(width: 6),
             Expanded(
@@ -56,7 +68,7 @@ class AnimaruGuide extends StatelessWidget {
                   ),
                 ),
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 26),
+                  margin: const EdgeInsets.only(bottom: 42),
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                   decoration: const BoxDecoration(
                     color: Colors.white,
