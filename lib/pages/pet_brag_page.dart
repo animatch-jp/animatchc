@@ -19,6 +19,23 @@ import '../widgets/share_card.dart';
 
 
 
+// まだ使っていない投稿の名前（ID）を探す。前に消した投稿の名前は使わない
+// （消した投稿のコメントや票が、新しい投稿に出てこないように）
+Future<String?> petBragFreeSlot(String prefix, int max) async {
+  final db = FirebaseFirestore.instance;
+  for (var n = 1; n <= max; n++) {
+    final ref = db.collection('petBrags').doc('$prefix$n');
+    final snap = await ref.get();
+    if (snap.exists) continue;
+    final c = await ref.collection('comments').limit(1).get();
+    if (c.docs.isNotEmpty) continue;
+    final v = await ref.collection('voters').limit(1).get();
+    if (v.docs.isNotEmpty) continue;
+    return ref.id;
+  }
+  return null;
+}
+
 void showPostDetail(BuildContext context, String postId) {
   showModalBottomSheet(
     context: context,
@@ -1694,20 +1711,36 @@ class _PostBragSheetState extends State<_PostBragSheet> {
 
     setState(() => _isPosting = true);
 
-    await FirebaseFirestore.instance.collection('petBrags').add({
-      'uid': myUid,
-      'petId': _selectedPetId,
-      'petName': _petNameCtrl.text.trim(),
-      'imageUrl': _imageUrl,
-      'comment': _commentCtrl.text.trim(),
-      'theme': _selectedTheme,
-      'animalType': _selectedAnimalType,
-      'dateKey': widget.dateKey,
-      'createdAt': FieldValue.serverTimestamp(),
-      'votes': {'kawaii': 0, 'omoshiroi': 0, 'iyashi': 0},
-      'voteCount': 0,
-      'commentCount': 0,
-    });
+    // 投稿の名前（ID）を「自分_d_日付_1〜3」にして、データを守るルールでも1日3枚までにする
+    // （アプリでは1日1枚。消してから出し直すときのために、予備を2つ）
+    try {
+      final id = await petBragFreeSlot('${myUid}_d_${widget.dateKey}_', 3);
+      if (id == null) throw StateError('limit');
+      await FirebaseFirestore.instance
+          .collection('petBrags')
+          .doc(id)
+          .set({
+        'uid': myUid,
+        'petId': _selectedPetId,
+        'petName': _petNameCtrl.text.trim(),
+        'imageUrl': _imageUrl,
+        'comment': _commentCtrl.text.trim(),
+        'theme': _selectedTheme,
+        'animalType': _selectedAnimalType,
+        'dateKey': widget.dateKey,
+        'createdAt': FieldValue.serverTimestamp(),
+        'votes': {'kawaii': 0, 'omoshiroi': 0, 'iyashi': 0},
+        'voteCount': 0,
+        'commentCount': 0,
+      });
+    } catch (e) {
+      debugPrint('ペット自慢の投稿エラー: $e');
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('投稿できませんでした。今日の分は、もう投稿ずみかもしれません')));
+      return;
+    }
 
     await _checkAndAwardBadges(myUid);
 
@@ -2029,21 +2062,41 @@ class _PostMonthlyBragSheetState extends State<_PostMonthlyBragSheet> {
     final dateKey =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    await FirebaseFirestore.instance.collection('petBrags').add({
-      'uid': myUid,
-      'petId': _selectedPetId,
-      'petName': _petNameCtrl.text.trim(),
-      'imageUrl': _imageUrl,
-      'comment': _commentCtrl.text.trim(),
-      'theme': widget.themeTitle,
-      'animalType': _selectedAnimalType,
-      'monthlyThemeKey': getMonthlyThemeKey(now),
-      'dateKey': dateKey,
-      'createdAt': FieldValue.serverTimestamp(),
-      'votes': {'kawaii': 0, 'omoshiroi': 0, 'iyashi': 0},
-      'voteCount': 0,
-      'commentCount': 0,
-    });
+    // 月のテーマは1か月5枚まで（アプリ）。投稿の名前（ID）を「自分_m_月_1〜9」にして、
+    // データを守るルールでも9枚まで（消してから出し直すときの予備をふくむ）にする
+    final monthKey = getMonthlyThemeKey(now);
+    try {
+      final mine = await FirebaseFirestore.instance
+          .collection('petBrags')
+          .where('uid', isEqualTo: myUid)
+          .where('monthlyThemeKey', isEqualTo: monthKey)
+          .get();
+      if (mine.docs.length >= 5) throw StateError('limit');
+      final id = await petBragFreeSlot('${myUid}_m_${monthKey}_', 9);
+      if (id == null) throw StateError('limit');
+      await FirebaseFirestore.instance.collection('petBrags').doc(id).set({
+        'uid': myUid,
+        'petId': _selectedPetId,
+        'petName': _petNameCtrl.text.trim(),
+        'imageUrl': _imageUrl,
+        'comment': _commentCtrl.text.trim(),
+        'theme': widget.themeTitle,
+        'animalType': _selectedAnimalType,
+        'monthlyThemeKey': monthKey,
+        'dateKey': dateKey,
+        'createdAt': FieldValue.serverTimestamp(),
+        'votes': {'kawaii': 0, 'omoshiroi': 0, 'iyashi': 0},
+        'voteCount': 0,
+        'commentCount': 0,
+      });
+    } catch (e) {
+      debugPrint('月のテーマの投稿エラー: $e');
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('投稿できませんでした。今月の5枚を、もう投稿ずみかもしれません')));
+      return;
+    }
 
     await _maybeRequestReview(myUid);
 
