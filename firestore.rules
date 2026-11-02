@@ -325,7 +325,7 @@ service cloud.firestore {
           && !(request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('bannedUsers', []))
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('age', 0) >= 18;
         allow delete: if request.auth != null && (
-          request.auth.uid == uid ||
+          request.auth.uid == uid || isAdmin() ||
           get(/databases/$(database)/documents/events/$(eventId)).data.organizerUid == request.auth.uid
         );
       }
@@ -360,6 +360,9 @@ service cloud.firestore {
         );
         allow create: if request.auth != null && request.resource.data.uid == request.auth.uid
           && strMax(request.resource.data, 'reason', 300);
+        // イベントを消すときに、主催者と運営が中身も消せる
+        allow delete: if request.auth != null && (isAdmin() ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.organizerUid == request.auth.uid);
       }
     }
     match /petBrags/{postId} {

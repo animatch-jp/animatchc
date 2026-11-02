@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/event_cleanup.dart';
 import '../services/private_account.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -457,10 +458,9 @@ return Text(
             ),
           );
           if (confirm == true) {
-            await FirebaseFirestore.instance
+            await EventCleanup.deleteEvent(FirebaseFirestore.instance
                 .collection('events')
-                .doc(data['eventId'] as String)
-                .delete();
+                .doc(data['eventId'] as String));
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('イベントを削除しました'), backgroundColor: Colors.grey),

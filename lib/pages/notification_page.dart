@@ -204,6 +204,13 @@ class _NotificationPageState extends State<NotificationPage> {
     return '${time.month}/${time.day}';
   }
 
+  // 運営だけが送れる通知（データを守るルールでも、運営以外は送れないようにしている）
+  static const _adminTypes = {
+    'orgApproved', 'orgRejected', 'orgUpdateReflected',
+    'hospitalApproved', 'hospitalRejected', 'hospitalUpdateReflected',
+    'reportHandled', 'admin', 'announcement',
+  };
+
   Color _typeColor(String type) {
     switch (type) {
       case 'like':
@@ -411,6 +418,15 @@ class _NotificationPageState extends State<NotificationPage> {
                               ),
                           ],
                         ),
+                        if (_adminTypes.contains(type)) ...[
+                          const SizedBox(height: 3),
+                          Row(children: [
+                            const Icon(Icons.verified_rounded, size: 14, color: Color(0xFF2D6A4F)),
+                            const SizedBox(width: 3),
+                            Text('AniMatch運営から',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green[800])),
+                          ]),
+                        ],
                         const SizedBox(height: 4),
                         Text(notif['desc'] as String? ?? '',
                             style: TextStyle(

@@ -2,6 +2,7 @@ import '../services/cloudinary_service.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
+import '../services/event_cleanup.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -863,7 +864,7 @@ class _EventPageState extends State<EventPage> {
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
-      await eventRef.delete();
+      await EventCleanup.deleteEvent(eventRef);
       _loadEvents();
       _loadMyPostCounts();
       _showSnack('削除しました', color: Colors.grey);
@@ -1184,10 +1185,18 @@ class _EventPageState extends State<EventPage> {
                 ],
               ),
             )
-                : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: events.length,
-              itemBuilder: (_, i) => _buildEventCard(events[i]),
+                : RefreshIndicator(
+              // 下に引っぱると、イベントの一覧を読みこみ直す
+              color: _orange,
+              onRefresh: () async {
+                await _loadEvents();
+              },
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: events.length,
+                itemBuilder: (_, i) => _buildEventCard(events[i]),
+              ),
             ),
           ),
         ],

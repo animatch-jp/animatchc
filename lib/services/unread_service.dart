@@ -220,9 +220,21 @@ class UnreadService {
     }
     final epoch = _epoch;
     try {
-      final eventsSnap =
-      await FirebaseFirestore.instance.collection('events').get();
-      final flags = await Future.wait(eventsSnap.docs.map((d) async {
+      // 全部のイベントを読むと重いので（バグ9）、読むのは
+      // 「まだ終わっていないイベント」と「自分が企画したイベント」だけにする
+      final col = FirebaseFirestore.instance.collection('events');
+      final results = await Future.wait([
+        col.where('endDate', isGreaterThan: Timestamp.now()).get(),
+        col.where('organizerUid', isEqualTo: uid).get(),
+      ]);
+      final byId = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final r in results) {
+        for (final d in r.docs) {
+          byId[d.id] = d;
+        }
+      }
+      final docs = byId.values.toList();
+      final flags = await Future.wait(docs.map((d) async {
         // 終わったイベントのチャットは、一覧に出さない（イベントの一覧と同じ）
         if (!_isOpenFor(d.data(), uid)) return false;
         if (d.data()['organizerUid'] == uid) return true;
@@ -233,9 +245,9 @@ class UnreadService {
 
       final joined = <String>{};
       _eventMeta.clear();
-      for (var i = 0; i < eventsSnap.docs.length; i++) {
+      for (var i = 0; i < docs.length; i++) {
         if (!flags[i]) continue;
-        final d = eventsSnap.docs[i];
+        final d = docs[i];
         final data = d.data();
         joined.add(d.id);
         _eventMeta[d.id] = {

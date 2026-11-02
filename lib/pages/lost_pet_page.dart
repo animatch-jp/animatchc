@@ -196,6 +196,32 @@ void showLostPetDetail(BuildContext context, Map<String, dynamic> data, String p
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                            builder: (sheetCtx) => Padding(
+                              padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+                              child: _LostPetPostSheet(postId: postId, initial: data),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.edit_rounded),
+                        label: const Text('内容を直す', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3498DB),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
                       child: OutlinedButton(
                         onPressed: () async {
                           final newStatus = data['status'] == 'resolved' ? 'lost' : 'resolved';
@@ -523,7 +549,10 @@ class _InfoRow extends StatelessWidget {
   }
 }
 class _LostPetPostSheet extends StatefulWidget {
-  const _LostPetPostSheet();
+  // postId と initial があるときは、投稿した内容を直す
+  final String? postId;
+  final Map<String, dynamic>? initial;
+  const _LostPetPostSheet({this.postId, this.initial});
 
   @override
   State<_LostPetPostSheet> createState() => _LostPetPostSheetState();
@@ -542,6 +571,29 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
   final _rewardCtrl = TextEditingController();
   bool _urgent = false;
   String? _selectedArea;
+
+  bool get _isEdit => widget.postId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initial;
+    if (d != null) {
+      String t(String k) => (d[k] ?? '').toString();
+      _petNameCtrl.text = t('petName');
+      _animalTypeCtrl.text = t('animalType');
+      _locationCtrl.text = t('location');
+      _dateCtrl.text = t('date');
+      _descriptionCtrl.text = t('description');
+      _contactCtrl.text = t('contact');
+      _rewardCtrl.text = t('reward');
+      _urgent = d['urgent'] == true;
+      final a = t('area');
+      _selectedArea = a.isEmpty ? null : a;
+      final img = t('imageUrl');
+      _imageUrl = img.isEmpty ? null : img;
+    }
+  }
 
 
   Future<void> _pickImage() async {
@@ -566,9 +618,37 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
 
     setState(() => _isPosting = true);
 
+    // 直すとき：だれの投稿か・状態・投稿した日は変えず、中身だけを書きかえる
+    if (_isEdit) {
+      try {
+        await FirebaseFirestore.instance.collection('lostPets').doc(widget.postId).update({
+          'petName': _petNameCtrl.text.trim(),
+          'animalType': _animalTypeCtrl.text.trim(),
+          'location': _locationCtrl.text.trim(),
+          'area': _selectedArea ?? '',
+          'date': _dateCtrl.text.trim(),
+          'description': _descriptionCtrl.text.trim(),
+          'contact': _contactCtrl.text.trim(),
+          'reward': _rewardCtrl.text.trim(),
+          'imageUrl': _imageUrl ?? '',
+          'urgent': _urgent,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        if (mounted) Navigator.pop(context);
+      } catch (_) {
+        if (mounted) {
+          setState(() => _isPosting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('保存できませんでした。もう一度お試しください')));
+        }
+      }
+      return;
+    }
+
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(user.uid).get();
-    final isOrg = orgDoc.exists;
+    // 「団体」の印は、運営が承認した団体だけ（データを守るルールと同じ）
+    final isOrg = orgDoc.exists && orgDoc.data()?['status'] == 'approved';
     final myName = isOrg
         ? (orgDoc.data()?['name'] as String? ?? '団体')
         : (userDoc.data()?['name'] as String? ?? '名無しさん');
@@ -602,7 +682,7 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('迷子・保護情報を投稿', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(_isEdit ? '迷子・保護情報を直す' : '迷子・保護情報を投稿', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           GestureDetector(
             onTap: _isUploading ? null : _pickImage,
@@ -680,7 +760,7 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
               ),
               child: _isPosting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('投稿する', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : Text(_isEdit ? '保存する' : '投稿する', style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
