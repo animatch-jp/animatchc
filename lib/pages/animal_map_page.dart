@@ -28,6 +28,79 @@ late String _category = widget.initialCategory;
 String? _hospitalAnimalFilter;
 String? _hospitalAreaFilter;
 final Set<String> _hospitalFacilityFilters = {};
+// 団体・里親・迷子・ボランティアのタブで使う、ことばの検索と都道府県のしぼりこみ
+final _searchCtrl = TextEditingController();
+String _query = '';
+String? _area;
+
+@override
+void dispose() {
+  _searchCtrl.dispose();
+  super.dispose();
+}
+
+Widget _filterBar() {
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    child: Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 42,
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _query = v.trim()),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: _category == 'org' ? '団体の名前・活動で検索' : '名前・種類・場所で検索',
+                hintStyle: const TextStyle(fontSize: 13),
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: '消す',
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(21), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: _area == null ? Colors.white : const Color(0xFFE8845A).withOpacity(0.12),
+            borderRadius: BorderRadius.circular(21),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              value: _area,
+              hint: const Text('全国', style: TextStyle(fontSize: 13)),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF3D2B1F)),
+              items: [
+                const DropdownMenuItem<String?>(value: null, child: Text('全国')),
+                ...prefectures.map((p) => DropdownMenuItem<String?>(value: p, child: Text(p))),
+              ],
+              onChanged: (v) => setState(() => _area = v),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+_MapFilter get _filter => _MapFilter(_query, _area);
 
 Widget _categoryChip(String value, String label) {
 final sel = _category == value;
@@ -118,6 +191,8 @@ child: Text('団体・迷子情報・ボランティア・病院をまとめて�
 style: TextStyle(fontSize: 12, color: Colors.grey)),
 ),
 _chips(),
+if (_category == 'org' || _category == 'adoption' || _category == 'lost' || _category == 'volunteer')
+  _filterBar(),
 if (_category == 'hospital')
 Container(
 margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -170,10 +245,13 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
     child: ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
-        if (_category == 'org') ...const [LatestOrgPosts(limit: 3), _OrgList()],
-        if (_category == 'adoption') const _AdoptionList(),
-        if (_category == 'lost') const _LostList(),
-        if (_category == 'volunteer') const _VolunteerList(),
+        if (_category == 'org') ...[
+          if (_filter.isEmpty) const LatestOrgPosts(limit: 3),
+          _OrgList(filter: _filter),
+        ],
+        if (_category == 'adoption') _AdoptionList(filter: _filter),
+        if (_category == 'lost') _LostList(filter: _filter),
+        if (_category == 'volunteer') _VolunteerList(filter: _filter),
         if (_category == 'hospital')
           _HospitalList(
             animalFilter: _hospitalAnimalFilter,
@@ -1234,7 +1312,8 @@ Widget build(BuildContext context) {
 }
 }
 class _OrgList extends StatelessWidget {
-  const _OrgList();
+  final _MapFilter filter;
+  const _OrgList({required this.filter});
 
   @override
   Widget build(BuildContext context) {
@@ -1250,13 +1329,11 @@ class _OrgList extends StatelessWidget {
             child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
           );
         }
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('団体が見つかりませんでした', style: TextStyle(color: Colors.grey[500])),
-          );
-        }
+        final docs = snapshot.data!.docs
+            .where((d) => filter.matches(d.data() as Map<String, dynamic>,
+                ['name', 'area', 'activityDescription']))
+            .toList();
+        if (docs.isEmpty) return filter.empty('団体');
         return Column(
           children: docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
@@ -1281,7 +1358,8 @@ class _OrgList extends StatelessWidget {
   }
 }
 class _AdoptionList extends StatelessWidget {
-  const _AdoptionList();
+  final _MapFilter filter;
+  const _AdoptionList({required this.filter});
 
   @override
   Widget build(BuildContext context) {
@@ -1299,13 +1377,23 @@ class _AdoptionList extends StatelessWidget {
             child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
           );
         }
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('里親募集が見つかりませんでした', style: TextStyle(color: Colors.grey[500])),
+        final all = snapshot.data!.docs;
+        return FutureBuilder<Map<String, String>>(
+          future: filter.area == null ? null : _OrgAreas.load(),
+          builder: (context, areaSnap) {
+        if (filter.area != null && !areaSnap.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
           );
         }
+        final areas = areaSnap.data ?? const <String, String>{};
+        final docs = all.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return filter.matches(data, ['petName', 'type', 'personality', 'orgName'],
+              areaValue: areas[data['orgId']] ?? '');
+        }).toList();
+        if (docs.isEmpty) return filter.empty('里親募集');
         return Column(
           children: docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
@@ -1323,13 +1411,16 @@ class _AdoptionList extends StatelessWidget {
             );
           }).toList(),
         );
+          },
+        );
       },
     );
   }
 }
 
 class _LostList extends StatefulWidget {
-  const _LostList();
+  final _MapFilter filter;
+  const _LostList({required this.filter});
 
   @override
   State<_LostList> createState() => _LostListState();
@@ -1363,6 +1454,7 @@ class _LostListState extends State<_LostList> {
           stream: FirebaseFirestore.instance
               .collection('lostPets')
               .orderBy('createdAt', descending: true)
+              .limit(100) // 読みこみ回数をおさえる（新しい100件まで）
               .snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
@@ -1380,12 +1472,11 @@ class _LostListState extends State<_LostList> {
             } else if (_filter != 'all') {
               docs = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] == _filter).toList();
             }
-            if (docs.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text('該当する投稿はありません', style: TextStyle(color: Colors.grey[500])),
-              );
-            }
+            docs = docs
+                .where((d) => widget.filter.matches(d.data() as Map<String, dynamic>,
+                    ['petName', 'animalType', 'location', 'area', 'features', 'description']))
+                .toList();
+            if (docs.isEmpty) return widget.filter.empty('迷子情報');
 
             return Column(
               children: docs.map((doc) {
@@ -1483,7 +1574,8 @@ class _LostFilterChip extends StatelessWidget {
   }
 }
 class _VolunteerList extends StatelessWidget {
-  const _VolunteerList();
+  final _MapFilter filter;
+  const _VolunteerList({required this.filter});
 
   @override
   Widget build(BuildContext context) {
@@ -1501,13 +1593,11 @@ class _VolunteerList extends StatelessWidget {
             child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
           );
         }
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('ボランティア募集が見つかりませんでした', style: TextStyle(color: Colors.grey[500])),
-          );
-        }
+        final docs = snapshot.data!.docs
+            .where((d) => filter.matches(d.data() as Map<String, dynamic>,
+                ['title', 'location', 'area', 'orgName', 'description']))
+            .toList();
+        if (docs.isEmpty) return filter.empty('ボランティア募集');
         return Column(
           children: docs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
@@ -1681,5 +1771,57 @@ class _LostStatusBadge extends StatelessWidget {
       child: Text(isResolved ? '見つかりました' : '迷子中',
           style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
     );
+  }
+}
+
+
+// ことばの検索と都道府県のしぼりこみ（読んだものを、アプリの中でしぼる）
+class _MapFilter {
+  final String query;
+  final String? area;
+  const _MapFilter(this.query, this.area);
+
+  bool get isEmpty => query.isEmpty && area == null;
+
+  static String _norm(String s) => s.toLowerCase().replaceAll(RegExp(r'\s'), '');
+
+  // fields: 検索する項目の名前 / areaValue: その投稿の都道府県
+  bool matches(Map<String, dynamic> data, List<String> fields, {String? areaValue}) {
+    if (area != null) {
+      final a = areaValue ?? (data['area'] ?? '').toString();
+      if (!a.contains(area!) && !(data['location'] ?? '').toString().contains(area!.replaceAll(RegExp(r'[都府県]$'), ''))) {
+        return false;
+      }
+    }
+    if (query.isEmpty) return true;
+    final q = _norm(query);
+    for (final f in fields) {
+      if (_norm((data[f] ?? '').toString()).contains(q)) return true;
+    }
+    return false;
+  }
+
+  Widget empty(String what) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text(
+            isEmpty ? '$whatが見つかりませんでした' : '条件に合う$whatはありませんでした。ことばや都道府県を変えてみてください',
+            style: TextStyle(color: Colors.grey[500])),
+      );
+}
+
+// 里親募集には都道府県がないので、出している団体の都道府県を使う（1回だけ読む）
+class _OrgAreas {
+  static Future<Map<String, String>>? _future;
+  static Future<Map<String, String>> load() {
+    return _future ??= FirebaseFirestore.instance
+        .collection('organizations')
+        .where('status', isEqualTo: 'approved')
+        .get()
+        .then((s) => {for (final d in s.docs) d.id: (d.data()['area'] ?? '').toString()})
+        .catchError((e) {
+      _future = null;
+      debugPrint('団体の都道府県の読みこみエラー: $e');
+      return <String, String>{};
+    });
   }
 }
