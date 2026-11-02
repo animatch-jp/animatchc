@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/verified_org_mark.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'chat_page.dart';
@@ -83,8 +84,15 @@ void showAdoptionDetail(BuildContext context, Map<String, dynamic> data) {
                           const Text('🏢', style: TextStyle(fontSize: 20)),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(data['orgName'] ?? '',
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['orgName'] ?? '',
+                                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 3),
+                                const VerifiedOrgMark(),
+                              ],
+                            ),
                           ),
                           const Icon(Icons.chevron_right, color: Colors.grey),
                         ],
@@ -227,8 +235,15 @@ class AdoptionPage extends StatelessWidget {
                             Text('${data['age'] ?? ''} ・ ${data['gender'] ?? ''}',
                                 style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                             const SizedBox(height: 4),
-                            Text('🏢 ${data['orgName'] ?? ''}',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFFE8845A))),
+                            Wrap(
+                              spacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text('🏢 ${data['orgName'] ?? ''}',
+                                    style: const TextStyle(fontSize: 12, color: Color(0xFFE8845A))),
+                                const VerifiedOrgMark(small: true),
+                              ],
+                            ),
                           ],
                         ),
                       ),

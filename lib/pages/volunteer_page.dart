@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/verified_org_mark.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -96,24 +97,16 @@ class VolunteerPage extends StatelessWidget {
                                 style: TextStyle(
                                     fontSize: 12, color: Colors.grey[600])),
                             const SizedBox(height: 4),
-                            Text('🏢 ${data['orgName'] ?? ''}',
-                                style: const TextStyle(
-                                    fontSize: 12, color: Color(0xFFE8845A))),
-                            StreamBuilder<QuerySnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('volunteers')
-                                  .doc(docs[i].id)
-                                  .collection('interested')
-                                  .snapshots(),
-                              builder: (context, snap) {
-                                final count = snap.data?.docs.length ?? 0;
-                                if (count == 0) return const SizedBox();
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text('🙋 興味あります $count人',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                                );
-                              },
+                            // 「興味あります」の人数は、団体だけが見られる（だれが押したかを守るため）
+                            Wrap(
+                              spacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text('🏢 ${data['orgName'] ?? ''}',
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Color(0xFFE8845A))),
+                                const VerifiedOrgMark(small: true),
+                              ],
                             ),
                           ],
                         ),
@@ -210,8 +203,15 @@ class VolunteerPage extends StatelessWidget {
                             const Text('🏢', style: TextStyle(fontSize: 20)),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Text(data['orgName'] ?? '',
-                                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(data['orgName'] ?? '',
+                                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  const SizedBox(height: 3),
+                                  const VerifiedOrgMark(),
+                                ],
+                              ),
                             ),
                             const Icon(Icons.chevron_right, color: Colors.grey),
                           ],

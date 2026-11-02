@@ -165,6 +165,97 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
     );
   }
 
+  void _editPost({required bool adoption, required String docId, required Map<String, dynamic> data}) {
+    final orgId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final orgName = _orgData?['name'] ?? '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetCtx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+        child: adoption
+            ? _AdoptionPostSheet(orgId: orgId, orgName: orgName, docId: docId, initial: data,
+                onPosted: () => Navigator.pop(sheetCtx))
+            : _VolunteerPostSheet(orgId: orgId, orgName: orgName, docId: docId, initial: data,
+                onPosted: () => Navigator.pop(sheetCtx)),
+      ),
+    );
+  }
+
+  // 掲載をやめる（消す）。消す前に確かめる
+  Future<void> _deletePost({required String collection, required String docId, required String label}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('掲載をやめますか？'),
+        content: Text('「$label」を消します。消すと、元に戻せません。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false),
+              child: const Text('やめる', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('消す'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final ref = FirebaseFirestore.instance.collection(collection).doc(docId);
+      // ボランティア募集は、「興味あります」を押した人の記録（名前）も消す
+      if (collection == 'volunteers') {
+        try {
+          final its = await ref.collection('interested').get();
+          for (final d in its.docs) {
+            await d.reference.delete();
+          }
+        } catch (_) {}
+      }
+      await ref.delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('掲載をやめました'), backgroundColor: Colors.grey));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('消せませんでした')));
+      }
+    }
+  }
+
+  Widget _editRow(VoidCallback onEdit, VoidCallback onDelete) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_rounded, size: 16),
+            label: const Text('内容を直す', style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF3D2B1F),
+                padding: const EdgeInsets.symmetric(vertical: 8)),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline_rounded, size: 16),
+            label: const Text('掲載をやめる', style: TextStyle(fontSize: 12)),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(vertical: 8)),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _logout() async {
     await FirebaseAuth.instance.signOut();
     if (mounted) {
@@ -611,6 +702,12 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                                 const SizedBox(height: 8),
                                 const _TapHint(text: 'タップして、利用者から見える画面を確認'),
                                 const SizedBox(height: 8),
+                                _editRow(
+                                  () => _editPost(adoption: true, docId: docId, data: data),
+                                  () => _deletePost(collection: 'adoptions', docId: docId,
+                                      label: (data['petName'] ?? '').toString()),
+                                ),
+                                const SizedBox(height: 8),
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton(
@@ -755,6 +852,12 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                                 const SizedBox(height: 8),
                                 _VolunteerHint(volunteerId: docId),
                                 const SizedBox(height: 8),
+                                _editRow(
+                                  () => _editPost(adoption: false, docId: docId, data: data),
+                                  () => _deletePost(collection: 'volunteers', docId: docId,
+                                      label: (data['title'] ?? '').toString()),
+                                ),
+                                const SizedBox(height: 8),
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton(
@@ -807,11 +910,16 @@ class _AdoptionPostSheet extends StatefulWidget {
   final String orgId;
   final String orgName;
   final VoidCallback onPosted;
+  // docId と initial があるときは、投稿した内容を直す
+  final String? docId;
+  final Map<String, dynamic>? initial;
 
   const _AdoptionPostSheet({
     required this.orgId,
     required this.orgName,
     required this.onPosted,
+    this.docId,
+    this.initial,
   });
 
   @override
@@ -829,6 +937,26 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
   final _personalityCtrl = TextEditingController();
   final _backgroundCtrl = TextEditingController();
   final _conditionsCtrl = TextEditingController();
+
+  bool get _isEdit => widget.docId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initial;
+    if (d != null) {
+      String t(String k) => (d[k] ?? '').toString();
+      _petNameCtrl.text = t('petName');
+      _typeCtrl.text = t('type');
+      _ageCtrl.text = t('age');
+      if (['オス', 'メス', '不明'].contains(t('gender'))) _gender = t('gender');
+      _personalityCtrl.text = t('personality');
+      _backgroundCtrl.text = t('background');
+      _conditionsCtrl.text = t('conditions');
+      final img = t('imageUrl');
+      _imageUrl = img.isEmpty ? null : img;
+    }
+  }
 
   Future<void> _pickImage() async {
     setState(() => _isUploading = true);
@@ -852,9 +980,7 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
 
     setState(() => _isPosting = true);
 
-    await FirebaseFirestore.instance.collection('adoptions').add({
-      'orgId': widget.orgId,
-      'orgName': widget.orgName,
+    final body = <String, dynamic>{
       'petName': _petNameCtrl.text.trim(),
       'type': _typeCtrl.text.trim(),
       'age': _ageCtrl.text.trim(),
@@ -863,9 +989,28 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
       'imageUrl': _imageUrl,
       'background': _backgroundCtrl.text.trim(),
       'conditions': _conditionsCtrl.text.trim(),
-      'status': 'available',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    };
+    try {
+      final col = FirebaseFirestore.instance.collection('adoptions');
+      if (_isEdit) {
+        await col.doc(widget.docId).update({...body, 'updatedAt': FieldValue.serverTimestamp()});
+      } else {
+        await col.add({
+          ...body,
+          'orgId': widget.orgId,
+          'orgName': widget.orgName,
+          'status': 'available',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isPosting = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('保存できませんでした。運営の確認が終わっているか、文字が長すぎないかを確かめてください')));
+      }
+      return;
+    }
 
     widget.onPosted();
   }
@@ -878,7 +1023,7 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('里親募集を投稿',
+          Text(_isEdit ? '里親募集を直す' : '里親募集を投稿',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           GestureDetector(
@@ -1002,7 +1147,7 @@ class _AdoptionPostSheetState extends State<_AdoptionPostSheet> {
               ),
               child: _isPosting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('投稿する',
+                  : Text(_isEdit ? '保存する' : '投稿する',
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
@@ -1016,11 +1161,16 @@ class _VolunteerPostSheet extends StatefulWidget {
   final String orgId;
   final String orgName;
   final VoidCallback onPosted;
+  // docId と initial があるときは、投稿した内容を直す
+  final String? docId;
+  final Map<String, dynamic>? initial;
 
   const _VolunteerPostSheet({
     required this.orgId,
     required this.orgName,
     required this.onPosted,
+    this.docId,
+    this.initial,
   });
 
   @override
@@ -1036,6 +1186,25 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
   final _scheduleCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
   String? _selectedArea;
+
+  bool get _isEdit => widget.docId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initial;
+    if (d != null) {
+      String t(String k) => (d[k] ?? '').toString();
+      _titleCtrl.text = t('title');
+      _locationCtrl.text = t('location');
+      _scheduleCtrl.text = t('schedule');
+      _descriptionCtrl.text = t('description');
+      final a = t('area');
+      _selectedArea = a.isEmpty ? null : a;
+      final img = t('imageUrl');
+      _imageUrl = img.isEmpty ? null : img;
+    }
+  }
 
   Future<void> _pickImage() async {
     setState(() => _isUploading = true);
@@ -1057,18 +1226,35 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
 
     setState(() => _isPosting = true);
 
-    await FirebaseFirestore.instance.collection('volunteers').add({
-      'orgId': widget.orgId,
-      'orgName': widget.orgName,
+    final body = <String, dynamic>{
       'title': _titleCtrl.text.trim(),
       'location': _locationCtrl.text.trim(),
       'area': _selectedArea ?? '',
       'schedule': _scheduleCtrl.text.trim(),
       'description': _descriptionCtrl.text.trim(),
       'imageUrl': _imageUrl ?? '',
-      'status': 'open',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    };
+    try {
+      final col = FirebaseFirestore.instance.collection('volunteers');
+      if (_isEdit) {
+        await col.doc(widget.docId).update({...body, 'updatedAt': FieldValue.serverTimestamp()});
+      } else {
+        await col.add({
+          ...body,
+          'orgId': widget.orgId,
+          'orgName': widget.orgName,
+          'status': 'open',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isPosting = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('保存できませんでした。運営の確認が終わっているか、文字が長すぎないかを確かめてください')));
+      }
+      return;
+    }
 
     widget.onPosted();
   }
@@ -1081,7 +1267,7 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('ボランティア募集を投稿',
+          Text(_isEdit ? 'ボランティア募集を直す' : 'ボランティア募集を投稿',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           GestureDetector(
@@ -1191,7 +1377,7 @@ class _VolunteerPostSheetState extends State<_VolunteerPostSheet> {
               ),
               child: _isPosting
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('投稿する',
+                  : Text(_isEdit ? '保存する' : '投稿する',
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),

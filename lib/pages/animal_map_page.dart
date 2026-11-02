@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/verified_org_mark.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -450,6 +451,9 @@ class _TimelineCard extends StatelessWidget {
         subtitle: _timelineSubtitle(item),
         meta: _timeAgoOf(item.createdAt),
         urgent: item.type == 'lost' && d['urgent'] == true,
+        verified: item.type == 'adoption' || item.type == 'volunteer' ||
+            (item.type == 'lost' && d['isOrganization'] == true) ||
+            (item.type == 'org' && d['status'] == 'approved'),
       ),
     );
   }
@@ -1246,6 +1250,7 @@ class _OrgList extends StatelessWidget {
                 emoji: '🏠',
                 color: const Color(0xFF2D6A4F),
                 label: '🏠 保護団体',
+                verified: data['status'] == 'approved',
                 title: data['name'] ?? '',
                 subtitle: (data['area'] ?? '').toString(),
               ),
@@ -1292,6 +1297,7 @@ class _AdoptionList extends StatelessWidget {
                 emoji: '🐾',
                 color: Colors.orange,
                 label: '🐾 里親募集',
+                verified: true,
                 title: data['petName'] ?? '',
                 subtitle: (data['type'] ?? '').toString(),
               ),
@@ -1494,6 +1500,7 @@ class _VolunteerList extends StatelessWidget {
                 emoji: '🤝',
                 color: const Color(0xFFE8845A),
                 label: '🤝 ボランティア募集',
+                verified: true,
                 title: data['title'] ?? '',
                 subtitle: (data['location'] ?? '').toString(),
               ),
@@ -1523,6 +1530,8 @@ class _PhotoCard extends StatelessWidget {
   final String subtitle;
   final String meta;
   final bool urgent;
+  // 運営が確認した団体（またはその投稿）なら、印をつける
+  final bool verified;
 
   const _PhotoCard({
     required this.imageUrl,
@@ -1533,6 +1542,7 @@ class _PhotoCard extends StatelessWidget {
     this.subtitle = '',
     this.meta = '',
     this.urgent = false,
+    this.verified = false,
   });
 
   Widget _placeholder() {
@@ -1613,6 +1623,10 @@ class _PhotoCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+                if (verified) ...[
+                  const SizedBox(height: 4),
+                  const VerifiedOrgMark(small: true),
+                ],
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(subtitle,
