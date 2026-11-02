@@ -31,8 +31,19 @@ class OrgPosts {
   static CollectionReference<Map<String, dynamic>> get col =>
       FirebaseFirestore.instance.collection('orgPosts');
 
+  // 並べかえはアプリの中でする（データベースに「索引」を足さなくても動くように）
   static Query<Map<String, dynamic>> ofOrg(String orgId) =>
-      col.where('orgId', isEqualTo: orgId).orderBy('createdAt', descending: true);
+      col.where('orgId', isEqualTo: orgId);
+
+  static int _ms(dynamic t) =>
+      t is Timestamp ? t.millisecondsSinceEpoch : 9999999999999; // 保存した直後は、いちばん新しい扱い
+
+  static List<QueryDocumentSnapshot<Map<String, dynamic>>> newestFirst(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final l = [...docs];
+    l.sort((a, b) => _ms(b.data()['createdAt']).compareTo(_ms(a.data()['createdAt'])));
+    return l;
+  }
 
   static Query<Map<String, dynamic>> latest() =>
       col.orderBy('createdAt', descending: true);
@@ -421,7 +432,7 @@ class OrgPostList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: OrgPosts.ofOrg(orgId).limit(limit).snapshots(),
+      stream: OrgPosts.ofOrg(orgId).snapshots(),
       builder: (context, snap) {
         if (snap.hasError) {
           debugPrint('団体の投稿の読みこみエラー: ${snap.error}');
@@ -441,7 +452,7 @@ class OrgPostList extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF2D6A4F)))),
           );
         }
-        final docs = snap.data!.docs;
+        final docs = OrgPosts.newestFirst(snap.data!.docs).take(limit).toList();
         if (docs.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),

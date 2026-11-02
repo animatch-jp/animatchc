@@ -133,6 +133,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   const _PetTaskReminder(),
+                  const _MemoryCard(),
                   const _QuestionBoardPreview(),
                 ],
               ),
@@ -404,6 +405,170 @@ class _PetTaskReminderState extends State<_PetTaskReminder> {
           },
         );
       },
+    );
+  }
+}
+
+
+// 思い出の日：1週間前・1か月前・1年前（2年前・3年前も）の「今日」に投稿したペット自慢を出す
+class _MemoryCard extends StatefulWidget {
+  const _MemoryCard();
+
+  @override
+  State<_MemoryCard> createState() => _MemoryCardState();
+}
+
+class _MemoryCardState extends State<_MemoryCard> {
+  List<Map<String, dynamic>> _items = [];
+
+  static String _key(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // 1か月前・1年前の日が無いとき（3/31の1か月前など）は、その月の最後の日にする
+  static DateTime _monthsAgo(DateTime now, int months) {
+    var y = now.year;
+    var m = now.month - months;
+    while (m <= 0) {
+      m += 12;
+      y -= 1;
+    }
+    final last = DateTime(y, m + 1, 0).day;
+    return DateTime(y, m, now.day > last ? last : now.day);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final now = DateTime.now();
+    final labels = <String, String>{
+      _key(now.subtract(const Duration(days: 7))): '1週間前の今日',
+      _key(_monthsAgo(now, 1)): '1か月前の今日',
+      _key(_monthsAgo(now, 12)): '1年前の今日',
+      _key(_monthsAgo(now, 24)): '2年前の今日',
+      _key(_monthsAgo(now, 36)): '3年前の今日',
+    };
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('petBrags')
+          .where('uid', isEqualTo: uid)
+          .where('dateKey', whereIn: labels.keys.toList())
+          .limit(10)
+          .get();
+      final items = <Map<String, dynamic>>[];
+      for (final d in snap.docs) {
+        final data = d.data();
+        final img = (data['imageUrl'] ?? '').toString();
+        if (img.isEmpty) continue;
+        items.add({
+          ...data,
+          '_label': labels[data['dateKey']] ?? '思い出',
+        });
+      }
+      // 古い思い出から先に出す（1年前 → 1か月前 → 1週間前）
+      items.sort((a, b) => (a['dateKey'] ?? '').toString().compareTo((b['dateKey'] ?? '').toString()));
+      if (mounted) setState(() => _items = items);
+    } catch (e) {
+      debugPrint('思い出の日の読みこみエラー: $e');
+    }
+  }
+
+  void _open(Map<String, dynamic> it) {
+    showDialog(
+      context: context,
+      builder: (c) => Dialog(
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.network(it['imageUrl'] as String,
+                width: double.infinity, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox(
+                    height: 120, child: Center(child: Text('🐾', style: TextStyle(fontSize: 40))))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Text('${it['_label']}の${it['petName'] ?? 'うちの子'}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+            ),
+            if ((it['comment'] ?? '').toString().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: Text(it['comment'].toString(),
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5)),
+              ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(onPressed: () => Navigator.pop(c), child: const Text('とじる')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFFFFF1E6), Color(0xFFFFE4EC)]),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('📸 思い出の日',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+          const SizedBox(height: 2),
+          Text('前の今日に投稿した、うちの子です',
+              style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 132,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _items.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final it = _items[i];
+                return GestureDetector(
+                  onTap: () => _open(it),
+                  child: SizedBox(
+                    width: 104,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.network(it['imageUrl'] as String,
+                              width: 104, height: 96, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                  width: 104, height: 96, color: Colors.white,
+                                  child: const Center(child: Text('🐾', style: TextStyle(fontSize: 28))))),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(it['_label'] as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB4642E))),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
