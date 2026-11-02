@@ -234,11 +234,19 @@ class _TimelineList extends StatelessWidget {
                           .limit(15)
                           .snapshots(),
                       builder: (context, adoptSnap) {
-                        if (!lostSnap.hasData ||
-                            !volSnap.hasData ||
-                            !orgSnap.hasData ||
-                            !hospSnap.hasData ||
-                            !adoptSnap.hasData) {
+                        // 1つの種類が読めなくても（データベースの索引がまだない、など）、
+                        // ほかの種類は出す。読めなかった種類は、空として扱う
+                        bool waiting(AsyncSnapshot<QuerySnapshot> s) => !s.hasData && !s.hasError;
+                        for (final s in [lostSnap, volSnap, orgSnap, hospSnap, adoptSnap]) {
+                          if (s.hasError) debugPrint('すべてタブ：読めなかった種類があります: ${s.error}');
+                        }
+                        List<QueryDocumentSnapshot> docsOf(AsyncSnapshot<QuerySnapshot> s) =>
+                            s.data?.docs ?? const [];
+                        if (waiting(lostSnap) ||
+                            waiting(volSnap) ||
+                            waiting(orgSnap) ||
+                            waiting(hospSnap) ||
+                            waiting(adoptSnap)) {
                           return ListView(children: [
                             header,
                             const Padding(
@@ -249,27 +257,27 @@ class _TimelineList extends StatelessWidget {
                         }
 
                         final items = <_TimelineItem>[];
-                        for (final d in lostSnap.data!.docs) {
+                        for (final d in docsOf(lostSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           items.add(_TimelineItem('lost', '🔍', const Color(0xFF3498DB),
                               data['petName'] ?? '', data['createdAt'], d.id, data));
                         }
-                        for (final d in volSnap.data!.docs) {
+                        for (final d in docsOf(volSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           items.add(_TimelineItem('volunteer', '🤝', const Color(0xFFE8845A),
                               data['title'] ?? '', data['createdAt'], d.id, data));
                         }
-                        for (final d in orgSnap.data!.docs) {
+                        for (final d in docsOf(orgSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           items.add(_TimelineItem('org', '🏠', const Color(0xFF2D6A4F),
                               '${data['name'] ?? ''}', data['createdAt'], d.id, data));
                         }
-                        for (final d in hospSnap.data!.docs) {
+                        for (final d in docsOf(hospSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           items.add(_TimelineItem('hospital', '🏥', const Color(0xFF4DA8DA),
                               '${data['name'] ?? ''}', data['createdAt'], d.id, data));
                         }
-                        for (final d in adoptSnap.data!.docs) {
+                        for (final d in docsOf(adoptSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           items.add(_TimelineItem('adoption', '🐾', Colors.orange,
                               data['petName'] ?? '', data['createdAt'], d.id, data));
