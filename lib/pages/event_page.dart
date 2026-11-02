@@ -390,9 +390,9 @@ class _EventPageState extends State<EventPage> {
             SizedBox(height: 8),
             Text('✅ 2回キャンセルすると、24時間イベントに参加できません'),
             SizedBox(height: 8),
-            Text('✅ 3回キャンセルすると、イベントに参加できなくなります'),
+            Text('✅ 3回キャンセルすると、しばらくイベントに参加できなくなります'),
             SizedBox(height: 8),
-            Text('✅ キャンセルが多いとプロフィールに⚠️マークが表示されます'),
+            Text('✅ 最後のキャンセルから90日たつと、キャンセルの回数は0に戻ります'),
             SizedBox(height: 8),
             Text('✅ キャンセル時は必ず理由を選んでください'),
             SizedBox(height: 8),
@@ -493,9 +493,27 @@ class _EventPageState extends State<EventPage> {
     try {
       final db = FirebaseFirestore.instance;
       final userDoc = await db.collection('users').doc(myUid).get();
-      final cancelCount = userDoc.data()?['cancelCount'] as int? ?? 0;
+      var cancelCount = userDoc.data()?['cancelCount'] as int? ?? 0;
+      // 最後のキャンセルから90日たっていたら、回数を0に戻す
+      final lastCancel = userDoc.data()?['lastCancelAt'];
+      final canReset = cancelCount > 0 &&
+          (lastCancel is! Timestamp ||
+              DateTime.now().difference(lastCancel.toDate()) > const Duration(days: 90, minutes: 5));
+      if (canReset) {
+        try {
+          await db.collection('users').doc(myUid).update({'cancelCount': 0});
+          cancelCount = 0;
+        } catch (e) {
+          debugPrint('キャンセル回数を戻せませんでした: $e');
+        }
+      }
       if (cancelCount >= 3) {
-        _showSnack('キャンセルが多いためイベントに参加できません。運営にお問い合わせください。');
+        String when = '';
+        if (lastCancel is Timestamp) {
+          final d = lastCancel.toDate().add(const Duration(days: 91));
+          when = '${d.month}月${d.day}日ごろから、また参加できます。';
+        }
+        _showSnack('キャンセルが多いため、今はイベントに参加できません。$when');
         return;
       }
       // 2回キャンセルしたあとの、24時間の停止
@@ -512,7 +530,7 @@ class _EventPageState extends State<EventPage> {
       final String? warning = cancelCount == 1
           ? 'あと1回キャンセルすると、24時間イベントに参加できなくなります。\n本当に参加しますか？'
           : cancelCount == 2
-          ? 'あと1回キャンセルすると、イベントに参加できなくなります。\n本当に参加しますか？'
+          ? 'あと1回キャンセルすると、しばらくイベントに参加できなくなります（最後のキャンセルから90日で、もとに戻ります）。\n本当に参加しますか？'
           : null;
       if (warning != null) {
         final confirm = await showDialog<bool>(
@@ -653,6 +671,7 @@ class _EventPageState extends State<EventPage> {
       final newCancelCount = (myDoc.data()?['cancelCount'] as int? ?? 0) + 1;
       await db.collection('users').doc(myUid).update({
         'cancelCount': FieldValue.increment(1),
+        'lastCancelAt': FieldValue.serverTimestamp(),
         if (newCancelCount == 2)
           'eventSuspendedUntil': Timestamp.fromDate(
               DateTime.now().add(const Duration(hours: 24))),
@@ -680,7 +699,7 @@ class _EventPageState extends State<EventPage> {
         _showSnack('参加をキャンセルしました。24時間、イベントに参加できません',
             color: Colors.grey);
       } else if (newCancelCount >= 3) {
-        _showSnack('参加をキャンセルしました。今後はイベントに参加できません。運営にお問い合わせください',
+        _showSnack('参加をキャンセルしました。90日間、イベントに参加できません',
             color: Colors.grey);
       } else {
         _showSnack('参加をキャンセルしました', color: Colors.grey);

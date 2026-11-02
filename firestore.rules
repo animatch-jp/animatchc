@@ -67,8 +67,17 @@ service cloud.firestore {
     }
 
     // キャンセル回数は、1回ぶんしか増やせない（減らす・リセットは不可）
+    // キャンセル回数は1つずつしか増やせない。増やすときは、最後にキャンセルした日時もいっしょに記録する
     function cancelOk() {
-      return request.resource.data.cancelCount == resource.data.get('cancelCount', 0) + 1;
+      return request.resource.data.cancelCount == resource.data.get('cancelCount', 0) + 1
+        && request.resource.data.lastCancelAt == request.time;
+    }
+    // 最後のキャンセルから90日たったら、回数を0に戻せる（前の版で記録した日時がない人も戻せる）
+    function cancelResetOk() {
+      return request.resource.data.cancelCount == 0
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastCancelAt'])
+        && (!('lastCancelAt' in resource.data)
+            || request.time > resource.data.lastCancelAt + duration.value(90, 'd'));
     }
 
     // 参加停止の期限は、これから25時間以内の未来にだけ設定できる。短くする・消すことは不可
@@ -129,7 +138,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId
         && (!('age' in request.resource.data) || ageValid(userId))
-        && !request.resource.data.keys().hasAny(['email', 'fcmToken', 'gender', 'suspended', 'suspendedAt', 'cancelCount', 'eventSuspendedUntil'])
+        && !request.resource.data.keys().hasAny(['email', 'fcmToken', 'gender', 'suspended', 'suspendedAt', 'cancelCount', 'lastCancelAt', 'eventSuspendedUntil'])
         && strMax(request.resource.data, 'name', 20) && strMax(request.resource.data, 'bio', 300)
         && strMax(request.resource.data, 'motto', 30)
         && request.resource.data.name is string && request.resource.data.name.size() >= 1
@@ -141,8 +150,8 @@ service cloud.firestore {
         && noNewSecret('email') && noNewSecret('fcmToken') && noNewSecret('gender') && profileOk()
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
             || ageValid(userId))
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cancelCount'])
-            || cancelOk())
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cancelCount', 'lastCancelAt'])
+            || cancelOk() || cancelResetOk())
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['eventSuspendedUntil'])
             || suspendOk()))
         || (isAdmin()
