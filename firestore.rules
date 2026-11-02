@@ -155,16 +155,32 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow write: if request.auth != null && request.auth.uid == userId;
 
-        // うちの子の記録（体重・薬・通院など）は、本人だけが読める
+        // 毎日のお世話（ごはん・散歩など）は、本人だけが読める
         match /tasks/{taskId} {
           allow read: if request.auth != null && request.auth.uid == userId;
-          allow write: if request.auth != null && request.auth.uid == userId;
+          allow delete: if request.auth != null && request.auth.uid == userId;
+          allow create, update: if request.auth != null && request.auth.uid == userId
+            && strMax(request.resource.data, 'name', 30);
 
           match /logs/{logId} {
             allow read: if request.auth != null && request.auth.uid == userId;
             allow write: if request.auth != null && request.auth.uid == userId;
           }
         }
+      }
+      // 記録帳（体重・ワクチン・薬・通院・メモ）は、本人だけが読める・書ける
+      function recordOk(d) {
+        return d.keys().hasOnly(['kind', 'date', 'weight', 'note', 'nextDate', 'createdAt', 'updatedAt'])
+          && d.kind in ['weight', 'vaccine', 'medicine', 'hospital', 'other']
+          && d.date is timestamp
+          && strMax(d, 'note', 200)
+          && (!('weight' in d) || (d.weight is number && d.weight > 0 && d.weight <= 200))
+          && (!('nextDate' in d) || d.nextDate is timestamp);
+      }
+      match /pets/{petId}/records/{recordId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+          && recordOk(request.resource.data);
       }
       match /searchHistory/{historyId} {
         allow read: if request.auth != null && request.auth.uid == userId;

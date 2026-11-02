@@ -20,6 +20,7 @@ import 'admin_report_tools.dart';
 import 'block_list_page.dart';
 import 'badge_progress_page.dart';
 import 'help_page.dart';
+import 'pet_records.dart';
 
 
 class PetData {
@@ -174,12 +175,13 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _deletePet(PetData pet) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    await FirebaseFirestore.instance
+    // お世話の記録・記録帳も、いっしょに消す
+    await PetRecords.deletePetWithData(FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
         .collection('pets')
-        .doc(pet.id)
-        .delete();
+        .doc(pet.id));
+    if (!mounted) return;
     setState(() => _pets.removeWhere((p) => p.id == pet.id));
   }
   void _editPet(int index) {

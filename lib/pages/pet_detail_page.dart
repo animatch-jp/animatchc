@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'pet_brag_page.dart';
+import 'pet_records.dart';
 
 
 class PetDetailPage extends StatefulWidget {
@@ -52,6 +52,7 @@ const Text('お世話タスクを追加', style: TextStyle(fontSize: 16, fontWei
 const SizedBox(height: 12),
 TextField(
 controller: nameCtrl,
+maxLength: 30,
 decoration: InputDecoration(
 hintText: '例：ごはん、お薬、散歩',
 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -292,6 +293,9 @@ style: const TextStyle(fontSize: 11, color: Color(0xFFE8845A))),
       ],
     ),
   ),
+
+  if (FirebaseAuth.instance.currentUser?.uid == widget.uid)
+    PetRecordSection(uid: widget.uid, petId: widget.petId),
 
   Padding(
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),

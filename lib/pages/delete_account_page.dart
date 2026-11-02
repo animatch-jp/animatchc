@@ -72,6 +72,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
           await _deleteAll(t.reference.collection('logs'));
         }
         await _deleteDocs(tasks.docs.map((d) => d.reference));
+        await _deleteAll(pet.reference.collection('records'));
       }
       await _deleteDocs(pets.docs.map((d) => d.reference));
     });

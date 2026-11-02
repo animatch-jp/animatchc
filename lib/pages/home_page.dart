@@ -2,14 +2,13 @@ import 'profile_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'lost_pet_page.dart';
-import 'adoption_page.dart';
-import 'volunteer_page.dart';
 import 'pet_brag_page.dart';
 import 'ranking_page.dart';
 import 'question_board_page.dart';
 import 'animal_map_page.dart';
 import '../services/start_guide.dart';
+import 'pet_detail_page.dart';
+import 'pet_records.dart';
 
 class HomePage extends StatefulWidget {
   final ScrollController? scrollController;
@@ -135,6 +134,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   const _StartGuideCard(),
+                  const _CareReminderCard(),
                   const _PetTaskReminder(),
                   const _MemoryCard(),
                   const _QuestionBoardPreview(),
@@ -710,6 +710,148 @@ class _StartGuideCardState extends State<_StartGuideCard> {
           _row(1, _hasPet, 'うちの子を登録する', 'マイページから、名前と写真を登録できます', const ProfilePage()),
           _row(2, _hasPost, '最初の1枚を投稿する', 'ペット自慢に、お気に入りの写真を1枚', const PetBragPage()),
           _row(3, _orgSeen, '近くの保護団体を見てみる', 'どうぶつマップの「団体」から、活動を知れます', const AnimalMapPage(initialCategory: 'org')),
+        ],
+      ),
+    );
+  }
+}
+
+
+// 記録帳の「次の予定日」が近いものを、ホームでお知らせする（すぎたもの7日まで・これから14日まで）
+class _CareReminderCard extends StatefulWidget {
+  const _CareReminderCard();
+
+  @override
+  State<_CareReminderCard> createState() => _CareReminderCardState();
+}
+
+class _CareReminderCardState extends State<_CareReminderCard> {
+  List<Map<String, dynamic>> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final from = today.subtract(const Duration(days: 7));
+    final to = today.add(const Duration(days: 14));
+    try {
+      final pets = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('pets')
+          .limit(10)
+          .get();
+      final items = <Map<String, dynamic>>[];
+      for (final pet in pets.docs) {
+        final recs = await pet.reference
+            .collection('records')
+            .where('nextDate', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+            .where('nextDate', isLessThanOrEqualTo: Timestamp.fromDate(to))
+            .orderBy('nextDate')
+            .limit(3)
+            .get();
+        for (final r in recs.docs) {
+          final d = r.data();
+          final next = PetRecords.toDate(d['nextDate']);
+          if (next == null) continue;
+          items.add({
+            'pet': pet,
+            'kind': d['kind'],
+            'note': d['note'] ?? '',
+            'days': DateTime(next.year, next.month, next.day).difference(today).inDays,
+          });
+        }
+      }
+      items.sort((a, b) => (a['days'] as int).compareTo(b['days'] as int));
+      if (mounted) setState(() => _items = items.take(4).toList());
+    } catch (e) {
+      debugPrint('記録帳のお知らせの読みこみエラー: $e');
+    }
+  }
+
+  String _when(int days) {
+    if (days == 0) return '今日';
+    if (days == 1) return '明日';
+    if (days > 0) return 'あと$days日';
+    return '${-days}日すぎています';
+  }
+
+  Future<void> _open(QueryDocumentSnapshot<Map<String, dynamic>> pet) async {
+    final d = pet.data();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PetDetailPage(
+          uid: FirebaseAuth.instance.currentUser?.uid ?? '',
+          petId: pet.id,
+          petName: (d['name'] ?? '').toString(),
+          petType: (d['type'] ?? '').toString(),
+          petAge: (d['age'] ?? '').toString(),
+          petBio: (d['bio'] ?? '').toString(),
+          petTags: List<String>.from(d['tags'] ?? const []),
+          petImageUrl: d['imageUrl'] as String?,
+        ),
+      ),
+    );
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_items.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF8F2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFB7DEC6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('🔔 もうすぐの予定',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF2D6A4F))),
+          const SizedBox(height: 6),
+          ..._items.map((it) {
+            final pet = it['pet'] as QueryDocumentSnapshot<Map<String, dynamic>>;
+            final days = it['days'] as int;
+            final kind = (it['kind'] ?? 'other').toString();
+            final note = (it['note'] ?? '').toString();
+            return InkWell(
+              onTap: () => _open(pet),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Text(PetRecords.emoji[kind] ?? '📝', style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${pet.data()['name'] ?? ''}：${note.isEmpty ? (PetRecords.kinds[kind] ?? '') : note}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF3D2B1F)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_when(days),
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: days < 0 ? Colors.red : const Color(0xFF2D6A4F))),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
