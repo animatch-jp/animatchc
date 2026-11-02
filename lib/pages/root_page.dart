@@ -55,8 +55,8 @@ class _RootPageState extends State<RootPage> {
     super.dispose();
   }
 
-  // 生年月日から年齢を計算し直して、変わっていたら age を更新する。
-  // （イベントの18歳判定は users の age を見ているため）
+  // 生年月日から年代（10代・20代…）を計算し直して、変わっていたら更新する。
+  // 前の版でプロフィールに入っていた、くわしい年齢（age）は消す（ほかの人に見せないため）
   Future<void> _syncAge() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -66,11 +66,12 @@ class _RootPageState extends State<RootPage> {
       final birthDoc = await userRef.collection('private').doc('birth').get();
       final birth = AgeUtils.parse(birthDoc.data()?['birthDate'] as String?);
       if (birth == null) return; // 生年月日が未登録の人は、そのまま
-      final age = AgeUtils.calculate(birth);
+      final group = AgeUtils.group(AgeUtils.calculate(birth));
       final userDoc = await userRef.get();
       if (!userDoc.exists) return;
-      if (userDoc.data()?['age'] != age) {
-        await userRef.update({'age': age});
+      final data = userDoc.data() ?? {};
+      if (data['ageGroup'] != group || data.containsKey('age')) {
+        await userRef.update({'ageGroup': group, 'age': FieldValue.delete()});
       }
     } catch (e) {
       debugPrint('年齢の更新エラー: $e');

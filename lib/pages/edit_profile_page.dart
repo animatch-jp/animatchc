@@ -220,7 +220,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
         const SizedBox(height: 6),
         Text(
-            '現在の登録年齢：${widget.userData['age'] ?? '-'}歳\n'
+            '今の表示：${AgeUtils.groupOf(widget.userData).isEmpty ? '-' : AgeUtils.groupOf(widget.userData)}\n'
                 '生年月日を登録すると、年齢が自動で更新されるようになります。'
                 '生年月日は、あなた以外には表示されません。一度登録すると変更できません。',
             style: note),
@@ -311,7 +311,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         };
         final batch = db.batch();
         if (newAge != null) {
-          updates['age'] = newAge;
+          // ほかの人には年代だけを見せる（くわしい年齢はプロフィールから消す）
+          updates['ageGroup'] = AgeUtils.group(newAge);
+          updates['age'] = FieldValue.delete();
           // 生年月日は、本人しか読めない場所に保存する
           batch.set(userRef.collection('private').doc('birth'), {
             'birthDate': AgeUtils.format(_birthDate!),

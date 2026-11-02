@@ -302,7 +302,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '生年月日は、あなた以外には表示されません。プロフィールには年齢（歳）だけが表示されます。一度登録すると変更できません。',
+                    '生年月日は、あなた以外には表示されません。ほかの人には「10代」「20代」のような年代だけが表示されます。一度登録すると変更できません。',
                     style: TextStyle(
                         fontSize: 11, color: Colors.grey[600], height: 1.5),
                   ),

@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 /// 生年月日と年齢の計算。
 /// 生年月日は「2008-02-03」のような文字列で保存する（時差で日付がずれないようにするため）。
 class AgeUtils {
@@ -32,6 +35,36 @@ class AgeUtils {
       age--;
     }
     return age;
+  }
+
+  /// ほかの人に見せる年代：「10代」「20代」…（くわしい年齢は見せない）
+  static String group(int age) => age < 10 ? '10歳未満' : '${age - age % 10}代';
+
+  /// プロフィールのデータから、年代を出す（前の版で age だけがある人にも対応）
+  static String groupOf(Map<String, dynamic>? data) {
+    final g = data?['ageGroup'];
+    if (g is String && g.isNotEmpty) return g;
+    final a = data?['age'];
+    if (a is int) return group(a);
+    return '';
+  }
+
+  /// 自分の今の年齢（本人しか読めない生年月日から計算。なければ前の版の age）
+  static Future<int?> myAge() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+    try {
+      final b = await userRef.collection('private').doc('birth').get();
+      final birth = parse(b.data()?['birthDate'] as String?);
+      if (birth != null) return calculate(birth);
+    } catch (_) {}
+    try {
+      final u = await userRef.get();
+      return u.data()?['age'] as int?;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 画面に出す形：2008年2月3日

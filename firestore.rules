@@ -59,14 +59,24 @@ service cloud.firestore {
       return jst.year() - y - ((jst.month() < m || (jst.month() == m && jst.day() < d)) ? 1 : 0);
     }
 
-    // 書き込み後の生年月日と、書こうとしている年齢が合っているか
-    function ageValid(uid) {
+    // ほかの人に見せる年代（'10代'・'20代'…）。くわしい年齢はプロフィールに置かない
+    function ageGroupFrom(b) {
+      let a = ageFrom(b);
+      return a < 10 ? '10歳未満' : string(a - a % 10) + '代';
+    }
+    function ageGroupValid(uid) {
       let bpath = /databases/$(database)/documents/users/$(uid)/private/birth;
       return existsAfter(bpath)
-        && request.resource.data.age == ageFrom(getAfter(bpath).data.birthDate);
+        && request.resource.data.ageGroup == ageGroupFrom(getAfter(bpath).data.birthDate);
+    }
+    // 18歳以上か：本人しか読めない生年月日から計算する（前の版の age がある人は、それも見る）
+    function isAdultUser(uid) {
+      let bpath = /databases/$(database)/documents/users/$(uid)/private/birth;
+      return (exists(bpath) && ageFrom(get(bpath).data.birthDate) >= 18)
+        || get(/databases/$(database)/documents/users/$(uid)).data.get('age', 0) >= 18;
     }
 
-    // キャンセル回数は、1回ぶんしか増やせない（減らす・リセットは不可）
+
     // キャンセル回数は1つずつしか増やせない。増やすときは、最後にキャンセルした日時もいっしょに記録する
     function cancelOk() {
       return request.resource.data.cancelCount == resource.data.get('cancelCount', 0) + 1
@@ -137,8 +147,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId
-        && (!('age' in request.resource.data) || ageValid(userId))
-        && !request.resource.data.keys().hasAny(['email', 'fcmToken', 'gender', 'suspended', 'suspendedAt', 'cancelCount', 'lastCancelAt', 'eventSuspendedUntil'])
+        && (!('ageGroup' in request.resource.data) || ageGroupValid(userId))
+        && !request.resource.data.keys().hasAny(['age', 'email', 'fcmToken', 'gender', 'suspended', 'suspendedAt', 'cancelCount', 'lastCancelAt', 'eventSuspendedUntil'])
         && strMax(request.resource.data, 'name', 20) && strMax(request.resource.data, 'bio', 300)
         && strMax(request.resource.data, 'motto', 30)
         && request.resource.data.name is string && request.resource.data.name.size() >= 1
@@ -147,9 +157,10 @@ service cloud.firestore {
       // 運営：「一時停止」と、その日時だけ変えられる
       allow update: if (request.auth != null && request.auth.uid == userId
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['suspended', 'suspendedAt'])
-        && noNewSecret('email') && noNewSecret('fcmToken') && noNewSecret('gender') && profileOk()
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
-            || ageValid(userId))
+        && noNewSecret('email') && noNewSecret('fcmToken') && noNewSecret('gender') && noNewSecret('age')
+        && profileOk()
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ageGroup'])
+            || ageGroupValid(userId))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cancelCount', 'lastCancelAt'])
             || cancelOk() || cancelResetOk())
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['eventSuspendedUntil'])
@@ -347,7 +358,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.organizerUid == request.auth.uid
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('age', 0) >= 18
+        && isAdultUser(request.auth.uid)
         && (request.resource.data.get('isOfficial', false) == false || isAdmin())
         && eventOk(request.resource.data);
       allow update: if request.auth != null && (
@@ -368,7 +379,7 @@ service cloud.firestore {
         allow create: if request.auth != null
           && request.auth.uid == uid
           && !(request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('bannedUsers', []))
-          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('age', 0) >= 18;
+          && isAdultUser(request.auth.uid);
         allow delete: if request.auth != null && (
           request.auth.uid == uid || isAdmin() ||
           get(/databases/$(database)/documents/events/$(eventId)).data.organizerUid == request.auth.uid

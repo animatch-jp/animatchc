@@ -5,6 +5,7 @@
 // ・同じ相手への通報が多いときの印（HotBadge）、未対応の数（ReportSummary）
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/age_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'question_board_page.dart';
 import 'event_chat_page.dart';
@@ -711,7 +712,7 @@ class _UserReportListState extends State<UserReportList> {
                             ],
                           ),
                           subtitle: Text(
-                              '${d['age']?.toString() ?? '-'}歳　${d['prefecture'] ?? ''}　ID: ${u.id.substring(0, u.id.length < 6 ? u.id.length : 6)}'),
+                              '${AgeUtils.groupOf(d).isEmpty ? '-' : AgeUtils.groupOf(d)}　${d['prefecture'] ?? ''}　ID: ${u.id.substring(0, u.id.length < 6 ? u.id.length : 6)}'),
                           trailing: total == 0
                               ? null
                               : Column(

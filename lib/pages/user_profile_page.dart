@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'root_page.dart';
+import '../services/age_utils.dart';
 
 class UserProfilePage extends StatefulWidget {
   final String uid;
@@ -206,7 +207,7 @@ Widget build(BuildContext context) {
   }
 
   final name = _userData!['name'] ?? '';
-  final age = _userData!['age'] ?? '';
+  final ageGroup = AgeUtils.groupOf(_userData);
   final prefecture = _userData!['prefecture'] ?? '';
   final animal = _userData!['animal'] ?? '';
   final bio = _userData!['bio'] ?? '';
@@ -267,7 +268,8 @@ Widget build(BuildContext context) {
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF3D2B1F))),
-                Text('$age歳・$prefecture', style: const TextStyle(color: Colors.grey)),
+                Text([ageGroup, prefecture.toString()].where((s) => s.isNotEmpty).join('・'),
+                    style: const TextStyle(color: Colors.grey)),
                 const SizedBox(height: 4),
                 Text('$animal好き',
                     style: const TextStyle(color: Colors.grey, fontSize: 13)),

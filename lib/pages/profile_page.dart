@@ -21,6 +21,7 @@ import 'block_list_page.dart';
 import 'badge_progress_page.dart';
 import 'help_page.dart';
 import 'pet_records.dart';
+import '../services/age_utils.dart';
 
 
 class PetData {
@@ -69,7 +70,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Map<String, dynamic>? _userData;
   String _userName = '';
-  int _userAge = 0;
+  String _userAgeGroup = '';
   String _userPrefecture = '';
   String _userAnimal = '';
   String _userBio = '';
@@ -114,7 +115,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
           setState(() {
             _userName = data['name'] ?? '';
-            _userAge = data['age'] ?? 0;
+            _userAgeGroup = AgeUtils.groupOf(data);
             _userPrefecture = data['prefecture'] ?? '';
             _userAnimal = data['animal'] ?? '';
             _userBio = data['bio'] ?? '';
@@ -421,7 +422,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       style: const TextStyle(fontSize: 24,
                           fontWeight: FontWeight.w900,
                           color: Color(0xFF3D2B1F))),
-                  Text('$_userAge歳・$_userPrefecture',
+                  Text([_userAgeGroup, _userPrefecture].where((s) => s.isNotEmpty).join('・'),
                       style: const TextStyle(color: Colors.grey)),
                   const SizedBox(height: 4),
                   Text('$_userAnimal好き',
@@ -448,7 +449,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           builder: (_) => EditProfilePage(
                             userData: {
                               'name': _userName,
-                              'age': _userAge,
+                              'ageGroup': _userAgeGroup,
                               'prefecture': _userPrefecture,
                               'animal': _userAnimal,
                               'gender': _userData?['gender'],

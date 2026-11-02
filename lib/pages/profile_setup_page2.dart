@@ -97,7 +97,8 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
         if (birth != null) age = AgeUtils.calculate(birth);
         batch.set(db.collection('users').doc(user.uid), {
           'name': widget.name,
-          'age': age,
+          // ほかの人には、年代（10代・20代…）だけを見せる。くわしい年齢は生年月日から計算する
+          if (birth != null) 'ageGroup': AgeUtils.group(age),
           'prefecture': widget.prefecture,
           'animal': widget.animal,
           'bio': _bioCtrl.text.trim(),

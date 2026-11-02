@@ -3,6 +3,7 @@ import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import '../services/event_cleanup.dart';
+import '../services/age_utils.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -368,7 +369,8 @@ class _EventPageState extends State<EventPage> {
         .doc(myUid)
         .get();
     final agreed = doc.data()?['agreedToEventRules'] as bool? ?? false;
-    if (mounted) setState(() => _myAge = doc.data()?['age'] as int?);
+    final myAge = await AgeUtils.myAge();
+    if (mounted) setState(() => _myAge = myAge);
     if (!agreed && mounted) {
       _showRulesDialog();
     }
@@ -735,7 +737,7 @@ class _EventPageState extends State<EventPage> {
       FirebaseFirestore.instance.collection('users').doc(myUid);
       final myData = (await userRef.get()).data();
 
-      final age = myData?['age'] as int? ?? 0;
+      final age = await AgeUtils.myAge() ?? 0;
       if (age < 18) return '18歳未満はイベントを投稿できません';
 
       // 1日の回数は、ユーザー情報に数えておく（イベントを消しても減らない）
@@ -1478,7 +1480,7 @@ class _EventPageState extends State<EventPage> {
         .collection('users')
         .doc(myUid)
         .get();
-    final age = myDoc.data()?['age'] as int? ?? 0;
+    final age = await AgeUtils.myAge() ?? 0;
     if (age < 18) {
       if (sheetContext.mounted) Navigator.pop(sheetContext);
       _showSnack('18歳未満はイベントに参加できません');
