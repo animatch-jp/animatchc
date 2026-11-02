@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_page.dart';
 import 'org_posts.dart';
+import '../services/start_guide.dart';
 
 class OrganizationProfilePage extends StatelessWidget {
   final String orgId;
@@ -13,6 +14,8 @@ class OrganizationProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
+    // 「はじめてのこと」の「団体のページを見る」を、できたことにする（ふつうの利用者だけ）
+    if (myUid != null && myUid != orgId) StartGuide.markOrgSeen();
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F5),
       appBar: AppBar(

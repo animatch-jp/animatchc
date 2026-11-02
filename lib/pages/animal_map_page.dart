@@ -15,14 +15,16 @@ import 'package:url_launcher/url_launcher.dart';
 
 
 class AnimalMapPage extends StatefulWidget {
-  const AnimalMapPage({super.key});
+  // initialCategory: 最初に開くタブ（'all'・'org' など）
+  const AnimalMapPage({super.key, this.initialCategory = 'all'});
+  final String initialCategory;
 
   @override
   State<AnimalMapPage> createState() => _AnimalMapPageState();
 }
 
 class _AnimalMapPageState extends State<AnimalMapPage> {
-String _category = 'all';
+late String _category = widget.initialCategory;
 String? _hospitalAnimalFilter;
 String? _hospitalAreaFilter;
 final Set<String> _hospitalFacilityFilters = {};
@@ -319,7 +321,7 @@ class _TimelineList extends StatelessWidget {
                               const Padding(
                                 padding: EdgeInsets.all(32),
                                 child: Center(
-                                  child: Text('まだ投稿がありません', style: TextStyle(color: Colors.grey)),
+                                  child: Text('まだ投稿がありません。\nこれから、団体の里親募集やボランティア募集がふえていきます🐾', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, height: 1.6)),
                                 ),
                               ),
                             if (urgentItems.isNotEmpty) ...[

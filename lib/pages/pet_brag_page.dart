@@ -660,7 +660,7 @@ class _PetBragListState extends State<_PetBragList> {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Text('まだ投稿がありません', style: TextStyle(color: Colors.grey)),
+                  child: Text('まだ投稿がありません。\n最初の1枚を投稿してみませんか？🐾', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, height: 1.6)),
                 ),
               );
             }
@@ -1273,7 +1273,7 @@ class _RecommendedListState extends State<_RecommendedList> {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(32),
-              child: Text('まだ投稿がありません', style: TextStyle(color: Colors.grey)),
+              child: Text('まだ投稿がありません。\n最初の1枚を投稿してみませんか？🐾', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, height: 1.6)),
             ),
           );
         }

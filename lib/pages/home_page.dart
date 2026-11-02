@@ -8,6 +8,8 @@ import 'volunteer_page.dart';
 import 'pet_brag_page.dart';
 import 'ranking_page.dart';
 import 'question_board_page.dart';
+import 'animal_map_page.dart';
+import '../services/start_guide.dart';
 
 class HomePage extends StatefulWidget {
   final ScrollController? scrollController;
@@ -132,6 +134,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
+                  const _StartGuideCard(),
                   const _PetTaskReminder(),
                   const _MemoryCard(),
                   const _QuestionBoardPreview(),
@@ -567,6 +570,146 @@ class _MemoryCardState extends State<_MemoryCard> {
               },
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// はじめての人への案内：「ペットを登録 → 最初の1枚 → 団体のページを見る」
+// 3つともできたら、または「とじる」を押したら、もう出さない
+class _StartGuideCard extends StatefulWidget {
+  const _StartGuideCard();
+
+  @override
+  State<_StartGuideCard> createState() => _StartGuideCardState();
+}
+
+class _StartGuideCardState extends State<_StartGuideCard> {
+  bool _loaded = false;
+  bool _hide = true;
+  bool _hasPet = false;
+  bool _hasPost = false;
+  bool _orgSeen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final st = await StartGuide.load();
+      if (st['dismissed'] == true) {
+        if (mounted) setState(() => _loaded = true);
+        return;
+      }
+      final db = FirebaseFirestore.instance;
+      final pets = await db.collection('users').doc(uid).collection('pets').limit(1).get();
+      final posts = await db.collection('petBrags').where('uid', isEqualTo: uid).limit(1).get();
+      if (!mounted) return;
+      setState(() {
+        _hasPet = pets.docs.isNotEmpty;
+        _hasPost = posts.docs.isNotEmpty;
+        _orgSeen = st['orgSeen'] == true;
+        _hide = _hasPet && _hasPost && _orgSeen;
+        _loaded = true;
+      });
+    } catch (e) {
+      debugPrint('はじめての案内の読みこみエラー: $e');
+    }
+  }
+
+  Future<void> _go(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    _load(); // もどってきたら、できたかどうかを読み直す
+  }
+
+  Widget _row(int n, bool done, String title, String sub, Widget page) {
+    return InkWell(
+      onTap: done ? null : () => _go(page),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: done ? const Color(0xFF52B788) : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: done ? const Color(0xFF52B788) : const Color(0xFFE8845A)),
+              ),
+              child: done
+                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                  : Text('$n',
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFE8845A))),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: done ? Colors.grey : const Color(0xFF3D2B1F),
+                          decoration: done ? TextDecoration.lineThrough : null)),
+                  if (!done)
+                    Text(sub, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+            if (!done)
+              const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFFE8845A)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded || _hide) return const SizedBox.shrink();
+    final doneCount = [_hasPet, _hasPost, _orgSeen].where((b) => b).length;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFD8C2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('🐾 はじめてのこと（$doneCount/3）',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+              ),
+              TextButton(
+                onPressed: () {
+                  StartGuide.dismiss();
+                  setState(() => _hide = true);
+                },
+                child: Text('とじる', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ),
+            ],
+          ),
+          _row(1, _hasPet, 'うちの子を登録する', 'マイページから、名前と写真を登録できます', const ProfilePage()),
+          _row(2, _hasPost, '最初の1枚を投稿する', 'ペット自慢に、お気に入りの写真を1枚', const PetBragPage()),
+          _row(3, _orgSeen, '近くの保護団体を見てみる', 'どうぶつマップの「団体」から、活動を知れます', const AnimalMapPage(initialCategory: 'org')),
         ],
       ),
     );
