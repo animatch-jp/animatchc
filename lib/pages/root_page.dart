@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import 'home_page.dart';
 import 'chat_list_page.dart';
 import 'profile_page.dart';
@@ -41,6 +42,9 @@ class _RootPageState extends State<RootPage> {
     UnreadService.instance.init(); // 下タブ「チャット」のバッジ用に、未読を数え始める
     _initFCM();
     _syncAge(); // 誕生日が来ていたら、年齢を更新する
+    // 前の版でプロフィールに入っていたメールと通知の鍵を、本人だけの場所へ移す
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me != null) PrivateAccount.moveOldFields(me);
   }
 
   @override
@@ -84,10 +88,7 @@ class _RootPageState extends State<RootPage> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (token != null && user != null) {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({'fcmToken': token});
+      await PrivateAccount.saveFcmToken(user.uid, token);
     }
   }
 

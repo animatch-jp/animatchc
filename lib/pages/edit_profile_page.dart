@@ -438,6 +438,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             const SizedBox(height: 8),
             TextField(
               controller: _nameCtrl,
+              maxLength: 20,
               decoration: InputDecoration(
                 hintText: 'ニックネームを入力',
                 border: OutlineInputBorder(
@@ -565,6 +566,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             const SizedBox(height: 8),
             TextField(
               controller: _bioCtrl,
+              maxLength: 300,
               maxLines: 4,
               decoration: InputDecoration(
                 hintText: '動物への想いや自己紹介を書いてください',

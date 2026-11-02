@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
 import '../widgets/signup_decor.dart';
@@ -216,8 +217,9 @@ await FirebaseFirestore.instance
 .doc(uid)
 .update({
 'lastSeen': FieldValue.serverTimestamp(),
-'fcmToken': fcmToken ?? '',
 });
+// 通知の鍵は、本人しか読めない場所に保存する
+if (fcmToken != null) await PrivateAccount.saveFcmToken(uid, fcmToken);
 
 
 if (mounted) {

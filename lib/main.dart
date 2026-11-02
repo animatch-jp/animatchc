@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/private_account.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -26,10 +27,7 @@ Future<void> _setupPushNotifications() async {
   final user = FirebaseAuth.instance.currentUser;
 
   if (token != null && user != null) {
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .update({'fcmToken': token});
+    await PrivateAccount.saveFcmToken(user.uid, token);
   }
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {

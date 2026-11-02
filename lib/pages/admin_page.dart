@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'event_page.dart';
@@ -586,7 +587,10 @@ Widget _buildOrganizationRequests() {
                       const SizedBox(height: 6),
                       Text('サイト：${data['websiteUrl'] ?? 'なし'}'),
                       const SizedBox(height: 6),
-                      Text('メール：${data['email'] ?? ''}'),
+                      FutureBuilder<String>(
+                        future: PrivateAccount.contactEmail('organizations', orgId, data),
+                        builder: (_, s) => Text('メール：${s.data ?? ''}'),
+                      ),
                       const SizedBox(height: 16),
                       if (status == 'approved' &&
                           ((data['nameUpdatePending'] ?? '').toString().isNotEmpty ||
@@ -851,7 +855,10 @@ children: [
   ),
 
   const SizedBox(height: 6),
-Text('メール：${data['email'] ?? ''}'),
+FutureBuilder<String>(
+  future: PrivateAccount.contactEmail('hospitals', hospitalId, data),
+  builder: (_, s) => Text('メール：${s.data ?? ''}'),
+),
 const SizedBox(height: 6),
 Text('対応動物：${animalTags.join('、')}'),
 const SizedBox(height: 6),

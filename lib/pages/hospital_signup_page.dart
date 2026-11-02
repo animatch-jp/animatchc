@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -117,10 +118,16 @@ Future<void> _submit() async {
       'hasNightCare': _hasNightCare,
       'isPaused': false,
       'imageUrl': _imageUrl ?? '',
-      'email': _emailCtrl.text.trim(),
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     });
+    // メールアドレスは、病院と運営だけが読める場所に置く
+    if (uid != null) {
+      await PrivateAccount.contactRef('hospitals', uid).set({
+        'email': _emailCtrl.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
 
     if (mounted) {
       Navigator.pushAndRemoveUntil(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import '../services/content_filter.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
@@ -106,11 +107,17 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
           'interests': _selectedInterests,
           'spots': _selectedSpots,
           'uid': user.uid,
-          'email': user.email,
           'createdAt': FieldValue.serverTimestamp(),
           'isVisible': true,
           'profileImageUrl': widget.profileImageUrl ?? '',
         });
+// メールアドレスは、本人しか読めない場所に保存する（みんなが読めるプロフィールには入れない）
+        if (user.email != null) {
+          batch.set(PrivateAccount.userRef(user.uid), {
+            'email': user.email,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
 // 生年月日は、本人しか読めない場所に保存する
         if (widget.birthDate != null) {
           batch.set(
@@ -177,6 +184,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _bioCtrl,
+                    maxLength: 300,
                     maxLines: 3,
                     decoration: InputDecoration(
                       hintText: '動物への想いや自己紹介を書いてください',

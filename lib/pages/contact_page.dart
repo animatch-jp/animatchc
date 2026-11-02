@@ -193,6 +193,7 @@ class _ContactPageState extends State<ContactPage> {
             const SizedBox(height: 8),
             TextField(
               controller: _titleCtrl,
+              maxLength: 50,
               decoration: InputDecoration(
                 hintText: '件名を入力してください',
                 border: OutlineInputBorder(
@@ -214,6 +215,7 @@ class _ContactPageState extends State<ContactPage> {
             const SizedBox(height: 8),
             TextField(
               controller: _contentCtrl,
+              maxLength: 2000,
               maxLines: 6,
               decoration: InputDecoration(
                 hintText: 'お問い合わせ内容を入力してください',

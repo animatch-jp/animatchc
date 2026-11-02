@@ -243,6 +243,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _nameCtrl,
+                    maxLength: 20,
                     onTap: () {
                       if (!_nameListening) {
                         _nameListening = true;
