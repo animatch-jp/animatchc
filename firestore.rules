@@ -278,6 +278,23 @@ service cloud.firestore {
         allow delete: if request.auth != null && request.auth.uid == userId;
       }
     }
+    // アプリを開いた日の記録（続けて使われているかを見るため）。読めるのは本人と運営、書けるのは本人だけ
+    match /activity/{uid} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['firstDay', 'lastDay', 'days'])
+        && request.resource.data.firstDay is string && request.resource.data.firstDay.size() == 10
+        && request.resource.data.lastDay == request.resource.data.firstDay
+        && request.resource.data.days is list && request.resource.data.days.size() == 1;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastDay', 'days'])
+        && request.resource.data.lastDay is string && request.resource.data.lastDay.size() == 10
+        && request.resource.data.days is list
+        && request.resource.data.days.hasAll(resource.data.days)
+        && request.resource.data.days.size() <= resource.data.days.size() + 1
+        && request.resource.data.days.size() <= 3000;
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
     match /reports/{reportId} {
       allow read: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       // 通報する人は自分の名前でだけ。文字数の上限つき

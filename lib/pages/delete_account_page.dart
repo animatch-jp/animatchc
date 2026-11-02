@@ -92,6 +92,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         'blocks',
             () => _deleteAll(
             _db.collection('blocks').doc(uid).collection('blocked')));
+    await _safe('activity', () => _db.collection('activity').doc(uid).delete());
     await _safe('blocksDoc', () => _db.collection('blocks').doc(uid).delete());
     await _safe(
         'notifications',

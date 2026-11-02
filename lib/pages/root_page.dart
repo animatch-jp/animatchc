@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'animal_map_page.dart';
 import '../services/unread_service.dart';
 import '../services/age_utils.dart';
+import '../services/activity_log.dart';
 import 'suspended_page.dart';
 
 class RootPage extends StatefulWidget {
@@ -42,6 +43,7 @@ class _RootPageState extends State<RootPage> {
     UnreadService.instance.init(); // 下タブ「チャット」のバッジ用に、未読を数え始める
     _initFCM();
     _syncAge(); // 誕生日が来ていたら、年齢を更新する
+    ActivityLog.instance.start(); // アプリを開いた日を記録する（続けて使われているかを見るため）
     // 前の版でプロフィールに入っていたメールと通知の鍵を、本人だけの場所へ移す
     final me = FirebaseAuth.instance.currentUser?.uid;
     if (me != null) PrivateAccount.moveOldFields(me);

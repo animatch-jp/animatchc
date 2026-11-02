@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'event_page.dart';
 import 'admin_report_tools.dart';
+import 'admin_retention.dart';
 import 'package:flutter/services.dart';
 
 
@@ -28,7 +29,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
 @override
 void initState() {
 super.initState();
-_tabController = TabController(length: 5, vsync: this);
+_tabController = TabController(length: 6, vsync: this);
 
 
 _checkAdmin();
@@ -84,6 +85,7 @@ foregroundColor: Colors.white,
       Tab(text: '団体申請'),
       Tab(text: '病院申請'),
       Tab(text: 'お問い合わせ'),
+      Tab(text: '続けて使う人'),
     ],
 
   ),
@@ -97,6 +99,7 @@ foregroundColor: Colors.white,
       _buildOrganizationRequests(),
       _buildHospitalRequests(),
       _buildContactList(),
+      const RetentionView(),
     ],
   ),
 
