@@ -7,6 +7,7 @@ import '../services/cloudinary_service.dart';
 import '../services/content_filter.dart';
 import '../widgets/verified_org_mark.dart';
 import '../widgets/share_card.dart';
+import '../widgets/motion.dart';
 import 'organization_profile_page.dart';
 import 'report_page.dart';
 
@@ -77,6 +78,13 @@ class OrgPosts {
         child: OrgPostSheet(orgId: orgId, orgName: orgName, docId: docId, initial: initial),
       ),
     );
+    if (r == true && context.mounted) {
+      showHappyBurst(context,
+          message: docId == null ? '投稿しました' : '直しました',
+          sub: docId == null ? '団体のページと、どうぶつマップに出ます' : '',
+          emoji: '📢',
+          color: const Color(0xFF2D6A4F));
+    }
     return r == true;
   }
 
@@ -415,11 +423,8 @@ class OrgPostCard extends StatelessWidget {
           if (img.isNotEmpty)
             ClipRRect(
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-              child: Image.network(img,
-                  width: double.infinity,
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              child: FadeInNetworkImage(img,
+                  width: double.infinity, height: 200, placeholderColor: const Color(0xFFF1F8F4)),
             ),
         ],
       ),
@@ -471,7 +476,13 @@ class OrgPostList extends StatelessWidget {
         }
         return Column(
           children: docs
-              .map((d) => OrgPostCard(docId: d.id, data: d.data(), showOrgLink: false))
+              .asMap()
+              .entries
+              .map((e) => FadeSlideIn(
+                    key: ValueKey(e.value.id),
+                    index: e.key,
+                    child: OrgPostCard(docId: e.value.id, data: e.value.data(), showOrgLink: false),
+                  ))
               .toList(),
         );
       },
@@ -517,11 +528,21 @@ class _LatestOrgPostsState extends State<LatestOrgPosts> {
           children: [
             const Padding(
               padding: EdgeInsets.only(bottom: 10),
-              child: Text('📢 団体のお知らせ・活動報告',
-                  style: TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+              child: Row(
+                children: [
+                  Wiggle(child: Text('📢', style: TextStyle(fontSize: 16))),
+                  SizedBox(width: 6),
+                  Text('団体のお知らせ・活動報告',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+                ],
+              ),
             ),
-            ...docs.map((d) => OrgPostCard(docId: d.id, data: d.data())),
+            ...docs.asMap().entries.map((e) => FadeSlideIn(
+                  key: ValueKey(e.value.id),
+                  index: e.key,
+                  child: OrgPostCard(docId: e.value.id, data: e.value.data()),
+                )),
           ],
         );
       },

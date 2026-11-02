@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/content_filter.dart';
+import '../widgets/motion.dart';
 
 // うちの子の記録帳（体重・ワクチン・薬・通院・メモ）
 // 場所：users/{uid}/pets/{petId}/records/{id}（本人だけが読める・書ける）
@@ -169,6 +170,8 @@ class _PetRecordSheetState extends State<PetRecordSheet> {
           ? Timestamp.fromDate(DateTime(_next!.year, _next!.month, _next!.day))
           : FieldValue.delete(),
     };
+    // シートを閉じたあとでも、お祝いを出せるように、外側の画面を先に覚えておく
+    final outer = Navigator.of(context, rootNavigator: true).context;
     try {
       final col = PetRecords.col(widget.uid, widget.petId);
       if (_isEdit) {
@@ -178,6 +181,19 @@ class _PetRecordSheetState extends State<PetRecordSheet> {
         await col.add({...body, 'createdAt': FieldValue.serverTimestamp()});
       }
       if (mounted) Navigator.pop(context);
+      if (outer.mounted) {
+        showHappyBurst(
+          outer,
+          message: _isEdit ? '直しました' : '記録しました',
+          sub: _kind == 'weight'
+              ? '${PetRecords.weightLabel(weight)}（${PetRecords.dateLabel(_date)}）'
+              : (_canHaveNext && _next != null)
+                  ? '次の予定は ${PetRecords.dateLabel(_next!)}。近くなったらホームでお知らせします'
+                  : '',
+          emoji: PetRecords.emoji[_kind] ?? '📒',
+          stay: const Duration(milliseconds: 1300),
+        );
+      }
     } catch (e) {
       debugPrint('記録帳の保存エラー: $e');
       if (!mounted) return;
@@ -416,11 +432,15 @@ class PetRecordSection extends StatelessWidget {
                     return MapEntry(PetRecords.toDate(x['date']) ?? DateTime.now(),
                         (x['weight'] as num).toDouble());
                   }).toList()),
-                  ...docs.map((d) => _RecordRow(
-                        data: d.data(),
-                        onEdit: () => PetRecords.openSheet(context,
-                            uid: uid, petId: petId, docId: d.id, initial: d.data()),
-                        onDelete: () => _delete(context, d.id),
+                  ...docs.asMap().entries.map((e) => FadeSlideIn(
+                        key: ValueKey(e.value.id),
+                        index: e.key,
+                        child: _RecordRow(
+                          data: e.value.data(),
+                          onEdit: () => PetRecords.openSheet(context,
+                              uid: uid, petId: petId, docId: e.value.id, initial: e.value.data()),
+                          onDelete: () => _delete(context, e.value.id),
+                        ),
                       )),
                 ],
               );
@@ -518,7 +538,13 @@ class _WeightChart extends StatelessWidget {
           SizedBox(
             height: 90,
             width: double.infinity,
-            child: CustomPaint(painter: _WeightPainter(points)),
+            // 線が左から右へ、のびていくように描く
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: reduceMotion(context) ? 1.0 : 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 1100),
+              curve: Curves.easeInOutCubic,
+              builder: (_, t, __) => CustomPaint(painter: _WeightPainter(points, t)),
+            ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -538,7 +564,8 @@ class _WeightChart extends StatelessWidget {
 
 class _WeightPainter extends CustomPainter {
   final List<MapEntry<DateTime, double>> points;
-  _WeightPainter(this.points);
+  final double progress; // 0 → 1 で、線がのびる
+  _WeightPainter(this.points, this.progress);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -570,19 +597,54 @@ class _WeightPainter extends CustomPainter {
     for (var i = 1; i < points.length; i++) {
       path.lineTo(at(i).dx, at(i).dy);
     }
+    // のびた分だけ描く
+    final metrics = path.computeMetrics().toList();
+    final totalLen = metrics.fold<double>(0, (a, m) => a + m.length);
+    var remain = totalLen * progress;
+    final drawn = Path();
+    for (final m in metrics) {
+      if (remain <= 0) break;
+      drawn.addPath(m.extractPath(0, remain < m.length ? remain : m.length), Offset.zero);
+      remain -= m.length;
+    }
+    // 線の下を、うすく塗る
+    if (progress >= 1) {
+      final fill = Path.from(path)
+        ..lineTo(at(points.length - 1).dx, size.height)
+        ..lineTo(at(0).dx, size.height)
+        ..close();
+      canvas.drawPath(
+          fill,
+          Paint()
+            ..shader = const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x33E8845A), Color(0x00E8845A)],
+            ).createShader(Offset.zero & size));
+    }
     canvas.drawPath(
-        path,
+        drawn,
         Paint()
           ..color = const Color(0xFFE8845A)
           ..strokeWidth = 2.5
           ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round);
     final dot = Paint()..color = const Color(0xFFE8845A);
+    final ring = Paint()..color = Colors.white;
     for (var i = 0; i < points.length; i++) {
-      canvas.drawCircle(at(i), 3.5, dot);
+      // 線がそこまで来たら、点がぽんっと出る
+      final appearAt = points.length == 1 ? 0.0 : i / (points.length - 1);
+      final k = ((progress - appearAt) / 0.12 + 1).clamp(0.0, 1.0);
+      if (k <= 0) continue;
+      final last = i == points.length - 1;
+      final r = (last ? 5.0 : 3.5) * k;
+      canvas.drawCircle(at(i), r + 1.5, ring);
+      canvas.drawCircle(at(i), r, dot);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _WeightPainter old) => old.points != points;
+  bool shouldRepaint(covariant _WeightPainter old) =>
+      old.points != points || old.progress != progress;
 }

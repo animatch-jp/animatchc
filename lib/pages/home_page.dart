@@ -9,6 +9,8 @@ import 'animal_map_page.dart';
 import '../services/start_guide.dart';
 import 'pet_detail_page.dart';
 import 'pet_records.dart';
+import '../widgets/motion.dart';
+import '../widgets/animaru.dart';
 
 class HomePage extends StatefulWidget {
   final ScrollController? scrollController;
@@ -483,36 +485,61 @@ class _MemoryCardState extends State<_MemoryCard> {
     }
   }
 
+  // 写真を大きく見せる：ぽんっと開いて、ふわっと文字が出る
   void _open(Map<String, dynamic> it) {
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (c) => Dialog(
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Image.network(it['imageUrl'] as String,
-                width: double.infinity, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox(
-                    height: 120, child: Center(child: Text('🐾', style: TextStyle(fontSize: 40))))),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Text('${it['_label']}の${it['petName'] ?? 'うちの子'}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+      barrierDismissible: true,
+      barrierLabel: 'とじる',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 380),
+      transitionBuilder: (_, a, __, child) {
+        final c = CurvedAnimation(parent: a, curve: Curves.easeOutBack, reverseCurve: Curves.easeIn);
+        return FadeTransition(
+          opacity: a,
+          child: ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(c), child: child),
+        );
+      },
+      pageBuilder: (c, _, __) => Center(
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 320,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: FadeInNetworkImage(it['imageUrl'] as String),
+                ),
+                FadeSlideIn(
+                  index: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    child: Text('${it['_label']}の${it['petName'] ?? 'うちの子'}',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+                  ),
+                ),
+                if ((it['comment'] ?? '').toString().isNotEmpty)
+                  FadeSlideIn(
+                    index: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                      child: Text(it['comment'].toString(),
+                          style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5)),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(onPressed: () => Navigator.pop(c), child: const Text('とじる')),
+                ),
+              ],
             ),
-            if ((it['comment'] ?? '').toString().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: Text(it['comment'].toString(),
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5)),
-              ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(onPressed: () => Navigator.pop(c), child: const Text('とじる')),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -521,63 +548,85 @@ class _MemoryCardState extends State<_MemoryCard> {
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFFFF1E6), Color(0xFFFFE4EC)]),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('📸 思い出の日',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
-          const SizedBox(height: 2),
-          Text('前の今日に投稿した、うちの子です',
-              style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 132,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _items.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) {
-                final it = _items[i];
-                return GestureDetector(
-                  onTap: () => _open(it),
-                  child: SizedBox(
-                    width: 104,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Image.network(it['imageUrl'] as String,
-                              width: 104, height: 96, fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                  width: 104, height: 96, color: Colors.white,
-                                  child: const Center(child: Text('🐾', style: TextStyle(fontSize: 28))))),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(it['_label'] as String,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB4642E))),
-                      ],
-                    ),
-                  ),
-                );
-              },
+    return FadeSlideIn(
+      index: 2,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFFFFF1E6), Color(0xFFFFE4EC)]),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Wiggle(child: Text('📸', style: TextStyle(fontSize: 16))),
+                SizedBox(width: 6),
+                Text('思い出の日',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text('前の今日に投稿した、うちの子です',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 140,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                itemCount: _items.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (_, i) {
+                  final it = _items[i];
+                  // 写真を、少しかたむけた「アルバム」のように並べる
+                  final tilt = (i.isEven ? -1 : 1) * 0.04;
+                  return PopIn(
+                    delayMs: 120 + i * 110,
+                    child: Pressable(
+                      onTap: () => _open(it),
+                      child: Transform.rotate(
+                        angle: tilt,
+                        child: Container(
+                          width: 104,
+                          padding: const EdgeInsets.fromLTRB(5, 5, 5, 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: FadeInNetworkImage(it['imageUrl'] as String, width: 94, height: 94),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(it['_label'] as String,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB4642E))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
-
 
 // はじめての人への案内：「ペットを登録 → 最初の1枚 → 団体のページを見る」
 // 3つともできたら、または「とじる」を押したら、もう出さない
@@ -595,15 +644,18 @@ class _StartGuideCardState extends State<_StartGuideCard> {
   bool _hasPost = false;
   bool _orgSeen = false;
 
+  int get _doneCount => [_hasPet, _hasPost, _orgSeen].where((b) => b).length;
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool celebrate = false}) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
+    final before = _doneCount;
     try {
       final st = await StartGuide.load();
       if (st['dismissed'] == true) {
@@ -614,13 +666,28 @@ class _StartGuideCardState extends State<_StartGuideCard> {
       final pets = await db.collection('users').doc(uid).collection('pets').limit(1).get();
       final posts = await db.collection('petBrags').where('uid', isEqualTo: uid).limit(1).get();
       if (!mounted) return;
+      final hasPet = pets.docs.isNotEmpty;
+      final hasPost = posts.docs.isNotEmpty;
+      final orgSeen = st['orgSeen'] == true;
+      final allDone = hasPet && hasPost && orgSeen;
       setState(() {
-        _hasPet = pets.docs.isNotEmpty;
-        _hasPost = posts.docs.isNotEmpty;
-        _orgSeen = st['orgSeen'] == true;
-        _hide = _hasPet && _hasPost && _orgSeen;
+        _hasPet = hasPet;
+        _hasPost = hasPost;
+        _orgSeen = orgSeen;
+        // 最初から全部できている人には出さない。ここでできた人には、お祝いのあとで閉じる
+        if (!celebrate) _hide = allDone;
         _loaded = true;
       });
+      if (celebrate && _doneCount > before && mounted) {
+        if (allDone) {
+          await showHappyBurst(context,
+              message: 'ぜんぶできたね！', sub: 'これで、AniMatchのはじめの一歩はおしまい', emoji: '🎉');
+          if (mounted) setState(() => _hide = true);
+          StartGuide.dismiss();
+        } else {
+          showHappyBurst(context, message: 'できた！', sub: 'あと${3 - _doneCount}つ', emoji: '✨');
+        }
+      }
     } catch (e) {
       debugPrint('はじめての案内の読みこみエラー: $e');
     }
@@ -628,51 +695,51 @@ class _StartGuideCardState extends State<_StartGuideCard> {
 
   Future<void> _go(Widget page) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-    _load(); // もどってきたら、できたかどうかを読み直す
+    _load(celebrate: true); // もどってきたら、できたかどうかを読み直す（できていたら、お祝い）
   }
 
   Widget _row(int n, bool done, String title, String sub, Widget page) {
-    return InkWell(
-      onTap: done ? null : () => _go(page),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(
-          children: [
-            Container(
-              width: 26,
-              height: 26,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: done ? const Color(0xFF52B788) : Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: done ? const Color(0xFF52B788) : const Color(0xFFE8845A)),
+    return FadeSlideIn(
+      index: n,
+      child: Pressable(
+        onTap: done ? null : () => _go(page),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            children: [
+              AnimatedCheckCircle(done: done, label: '$n'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 300),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: done ? Colors.grey : const Color(0xFF3D2B1F),
+                      decoration: done ? TextDecoration.lineThrough : null),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 250),
+                        child: done
+                            ? const SizedBox(width: double.infinity)
+                            : Text(sub,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.normal,
+                                    decoration: TextDecoration.none,
+                                    color: Colors.grey[600])),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: done
-                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
-                  : Text('$n',
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFE8845A))),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: done ? Colors.grey : const Color(0xFF3D2B1F),
-                          decoration: done ? TextDecoration.lineThrough : null)),
-                  if (!done)
-                    Text(sub, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                ],
-              ),
-            ),
-            if (!done)
-              const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFFE8845A)),
-          ],
+              if (!done)
+                const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: Color(0xFFE8845A)),
+            ],
+          ),
         ),
       ),
     );
@@ -680,44 +747,80 @@ class _StartGuideCardState extends State<_StartGuideCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded || _hide) return const SizedBox.shrink();
-    final doneCount = [_hasPet, _hasPost, _orgSeen].where((b) => b).length;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.fromLTRB(14, 12, 6, 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFD8C2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text('🐾 はじめてのこと（$doneCount/3）',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+    final show = _loaded && !_hide;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: !show
+            ? const SizedBox(width: double.infinity, key: ValueKey('hidden'))
+            : FadeSlideIn(
+                key: const ValueKey('guide'),
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 6, 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFFFD8C2)),
+                    boxShadow: [
+                      BoxShadow(
+                          color: const Color(0xFFE8845A).withOpacity(0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Animaru(size: 34, mood: AnimaruMood.happy),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text('はじめてのこと（$_doneCount/3）',
+                                style: const TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              StartGuide.dismiss();
+                              setState(() => _hide = true);
+                            },
+                            child: Text('とじる', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          ),
+                        ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8, bottom: 4),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: _doneCount / 3),
+                            duration: const Duration(milliseconds: 700),
+                            curve: Curves.easeOutCubic,
+                            builder: (_, v, __) => LinearProgressIndicator(
+                              value: v,
+                              minHeight: 7,
+                              backgroundColor: const Color(0xFFFFEDE2),
+                              color: const Color(0xFF52B788),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _row(1, _hasPet, 'うちの子を登録する', 'マイページから、名前と写真を登録できます', const ProfilePage()),
+                      _row(2, _hasPost, '最初の1枚を投稿する', 'ペット自慢に、お気に入りの写真を1枚', const PetBragPage()),
+                      _row(3, _orgSeen, '近くの保護団体を見てみる', 'どうぶつマップの「団体」から、活動を知れます',
+                          const AnimalMapPage(initialCategory: 'org')),
+                    ],
+                  ),
+                ),
               ),
-              TextButton(
-                onPressed: () {
-                  StartGuide.dismiss();
-                  setState(() => _hide = true);
-                },
-                child: Text('とじる', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-              ),
-            ],
-          ),
-          _row(1, _hasPet, 'うちの子を登録する', 'マイページから、名前と写真を登録できます', const ProfilePage()),
-          _row(2, _hasPost, '最初の1枚を投稿する', 'ペット自慢に、お気に入りの写真を1枚', const PetBragPage()),
-          _row(3, _orgSeen, '近くの保護団体を見てみる', 'どうぶつマップの「団体」から、活動を知れます', const AnimalMapPage(initialCategory: 'org')),
-        ],
       ),
     );
   }
 }
-
 
 // 記録帳の「次の予定日」が近いものを、ホームでお知らせする（すぎたもの7日まで・これから14日まで）
 class _CareReminderCard extends StatefulWidget {
@@ -807,55 +910,91 @@ class _CareReminderCardState extends State<_CareReminderCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (_items.isEmpty) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF8F2),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFB7DEC6)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('🔔 もうすぐの予定',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF2D6A4F))),
-          const SizedBox(height: 6),
-          ..._items.map((it) {
-            final pet = it['pet'] as QueryDocumentSnapshot<Map<String, dynamic>>;
-            final days = it['days'] as int;
-            final kind = (it['kind'] ?? 'other').toString();
-            final note = (it['note'] ?? '').toString();
-            return InkWell(
-              onTap: () => _open(pet),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
+    final urgent = _items.any((it) => (it['days'] as int) <= 1);
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      child: _items.isEmpty
+          ? const SizedBox(width: double.infinity)
+          : FadeSlideIn(
+              index: 1,
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF8F2),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFB7DEC6)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(PetRecords.emoji[kind] ?? '📝', style: const TextStyle(fontSize: 18)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${pet.data()['name'] ?? ''}：${note.isEmpty ? (PetRecords.kinds[kind] ?? '') : note}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF3D2B1F)),
-                      ),
+                    Row(
+                      children: [
+                        // 今日・明日・すぎている予定があるときは、ベルがゆれる
+                        Wiggle(active: urgent, child: const Text('🔔', style: TextStyle(fontSize: 16))),
+                        const SizedBox(width: 6),
+                        const Text('もうすぐの予定',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF2D6A4F))),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Text(_when(days),
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: days < 0 ? Colors.red : const Color(0xFF2D6A4F))),
+                    const SizedBox(height: 6),
+                    ..._items.asMap().entries.map((e) {
+                      final it = e.value;
+                      final pet = it['pet'] as QueryDocumentSnapshot<Map<String, dynamic>>;
+                      final days = it['days'] as int;
+                      final kind = (it['kind'] ?? 'other').toString();
+                      final note = (it['note'] ?? '').toString();
+                      return FadeSlideIn(
+                        index: e.key + 2,
+                        child: Pressable(
+                          onTap: () => _open(pet),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Text(PetRecords.emoji[kind] ?? '📝', style: const TextStyle(fontSize: 18)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${pet.data()['name'] ?? ''}：${note.isEmpty ? (PetRecords.kinds[kind] ?? '') : note}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 13, color: Color(0xFF3D2B1F)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: days < 0
+                                        ? Colors.red.withOpacity(0.1)
+                                        : days <= 1
+                                            ? const Color(0xFFFFF3E0)
+                                            : Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(_when(days),
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: days < 0
+                                              ? Colors.red
+                                              : days <= 1
+                                                  ? const Color(0xFFB4642E)
+                                                  : const Color(0xFF2D6A4F))),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
-            );
-          }),
-        ],
-      ),
+            ),
     );
   }
 }

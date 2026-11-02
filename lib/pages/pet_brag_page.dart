@@ -15,6 +15,7 @@ import '../widgets/badge_celebration.dart';
 import 'report_page.dart';
 import '../services/blocked_users.dart';
 import '../widgets/share_card.dart';
+import '../widgets/motion.dart';
 
 
 
@@ -1741,6 +1742,10 @@ class _PostBragSheetState extends State<_PostBragSheet> {
           content: Text('投稿できませんでした。今日の分は、もう投稿ずみかもしれません')));
       return;
     }
+    if (mounted) {
+      showHappyBurst(Navigator.of(context, rootNavigator: true).context,
+          message: '投稿しました！', sub: 'みんなのリアクションを待ちましょう', emoji: '📸');
+    }
 
     await _checkAndAwardBadges(myUid);
 
@@ -2096,6 +2101,10 @@ class _PostMonthlyBragSheetState extends State<_PostMonthlyBragSheet> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('投稿できませんでした。今月の5枚を、もう投稿ずみかもしれません')));
       return;
+    }
+    if (mounted) {
+      showHappyBurst(Navigator.of(context, rootNavigator: true).context,
+          message: '投稿しました！', sub: '今月のテーマに参加しました', emoji: '🏆');
     }
 
     await _maybeRequestReview(myUid);

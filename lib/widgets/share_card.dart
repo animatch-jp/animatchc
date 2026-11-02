@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'motion.dart';
+
 /// シェアカード：写真とひとことを、AniMatch のロゴ入りの画像にして、SNSなどに出せる。
 /// 自分の投稿（ペット自慢・団体の里親募集やお知らせ）だけに出す。
 class ShareCard {
@@ -67,13 +69,18 @@ class _ShareCardDialogState extends State<_ShareCardDialog> {
       // iPad では、シェアの画面を出す位置が必要
       final box = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
       final origin = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
-      await SharePlus.instance.share(ShareParams(
+      final outer = Navigator.of(context, rootNavigator: true).context;
+      final result = await SharePlus.instance.share(ShareParams(
         files: [XFile.fromData(bytes.buffer.asUint8List(), mimeType: 'image/png', name: 'animatch.png')],
         fileNameOverrides: const ['animatch.png'],
         text: '#AniMatch',
         sharePositionOrigin: origin,
       ));
       if (mounted) Navigator.pop(context);
+      if (result.status == ShareResultStatus.success && outer.mounted) {
+        showHappyBurst(outer,
+            message: 'シェアしました', sub: '見てくれる人がふえますように', emoji: '📤', color: widget.color);
+      }
     } catch (e) {
       debugPrint('シェアカードのエラー: $e');
       if (!mounted) return;
@@ -99,7 +106,9 @@ class _ShareCardDialogState extends State<_ShareCardDialog> {
             Text('この画像が、そのままSNSなどに出ます',
                 style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             const SizedBox(height: 12),
-            RepaintBoundary(
+            PopIn(
+              from: 0.8,
+              child: RepaintBoundary(
               key: _cardKey,
               child: _CardFace(
                 imageUrl: widget.imageUrl,
@@ -112,6 +121,7 @@ class _ShareCardDialogState extends State<_ShareCardDialog> {
                   if (!_imageReady && mounted) setState(() => _imageReady = true);
                 },
               ),
+            ),
             ),
             const SizedBox(height: 14),
             Row(

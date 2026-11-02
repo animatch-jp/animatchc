@@ -4,6 +4,7 @@ import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
 import '../services/event_cleanup.dart';
 import '../services/age_utils.dart';
+import '../widgets/motion.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -627,7 +628,9 @@ class _EventPageState extends State<EventPage> {
           }
         });
       }
-      _showSnack('参加しました！🐾', color: _orange);
+      if (mounted) {
+        showHappyBurst(context, message: '参加しました！', sub: 'グループチャットで、あいさつしてみよう', emoji: '🎪');
+      }
     } catch (e) {
       debugPrint('🔥 joinEvent エラー: $e');
       _showSnack('エラー: $e');

@@ -1,6 +1,7 @@
 import 'org_posts.dart';
 import 'package:flutter/material.dart';
 import '../widgets/verified_org_mark.dart';
+import '../widgets/motion.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -411,7 +412,12 @@ class _TimelineList extends StatelessWidget {
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
                                 child: Column(
-                                  children: urgentItems.map((i) => _TimelineCard(item: i)).toList(),
+                                  children: urgentItems
+                                      .map((i) => FadeSlideIn(
+                                            key: ValueKey('u${i.type}${i.id}'),
+                                            child: Pulse(child: _TimelineCard(item: i)),
+                                          ))
+                                      .toList(),
                                 ),
                               ),
                             ],
@@ -433,7 +439,11 @@ class _TimelineList extends StatelessWidget {
                                     childAspectRatio: 0.66,
                                   ),
                                   itemCount: gridItems.length,
-                                  itemBuilder: (_, i) => _TimelineTile(item: gridItems[i]),
+                                  itemBuilder: (_, i) => FadeSlideIn(
+                                    key: ValueKey('g${gridItems[i].type}${gridItems[i].id}'),
+                                    index: i,
+                                    child: _TimelineTile(item: gridItems[i]),
+                                  ),
                                 ),
                               ),
                             ],
@@ -693,7 +703,7 @@ class _ImpactCardState extends State<_ImpactCard> {
       children: [
         Text(emoji, style: const TextStyle(fontSize: 20)),
         const SizedBox(height: 4),
-        Text('$count', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+        CountUp(value: count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
         Text(label, style: const TextStyle(fontSize: 10, color: Colors.white70)),
       ],
     );
@@ -1023,10 +1033,14 @@ style: TextStyle(fontSize: 12, color: Colors.grey[600], height: 1.6),
 );
 }
 return Column(
-children: docs.map((doc) {
+children: docs.asMap().entries.map((entry) {
+final doc = entry.value;
 final data = doc.data() as Map<String, dynamic>;
 final animalTags = List<String>.from(data['animalTags'] ?? []);
-return GestureDetector(
+return FadeSlideIn(
+  key: ValueKey(doc.id),
+  index: entry.key,
+  child: Pressable(
   onTap: () => showHospitalDetail(context, doc.id, data),
 
 child: Container(
@@ -1120,6 +1134,7 @@ child: Text('✓ 実際に診てもらえた $verifiedCount人', style: const Te
 ),
 const Icon(Icons.chevron_right_rounded, color: Colors.grey),
 ],
+),
 ),
 ),
 );
@@ -1335,9 +1350,13 @@ class _OrgList extends StatelessWidget {
             .toList();
         if (docs.isEmpty) return filter.empty('団体');
         return Column(
-          children: docs.map((doc) {
+          children: docs.asMap().entries.map((entry) {
+final doc = entry.value;
             final data = doc.data() as Map<String, dynamic>;
-            return GestureDetector(
+            return FadeSlideIn(
+  key: ValueKey(doc.id),
+  index: entry.key,
+  child: Pressable(
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(
                       builder: (_) => OrganizationProfilePage(orgId: doc.id))),
@@ -1350,7 +1369,8 @@ class _OrgList extends StatelessWidget {
                 title: data['name'] ?? '',
                 subtitle: (data['area'] ?? '').toString(),
               ),
-            );
+            ),
+);
           }).toList(),
         );
       },
@@ -1395,9 +1415,13 @@ class _AdoptionList extends StatelessWidget {
         }).toList();
         if (docs.isEmpty) return filter.empty('里親募集');
         return Column(
-          children: docs.map((doc) {
+          children: docs.asMap().entries.map((entry) {
+final doc = entry.value;
             final data = doc.data() as Map<String, dynamic>;
-            return GestureDetector(
+            return FadeSlideIn(
+  key: ValueKey(doc.id),
+  index: entry.key,
+  child: Pressable(
               onTap: () => showAdoptionDetail(context, data),
               child: _PhotoCard(
                 imageUrl: _photoOf(data),
@@ -1408,7 +1432,8 @@ class _AdoptionList extends StatelessWidget {
                 title: data['petName'] ?? '',
                 subtitle: (data['type'] ?? '').toString(),
               ),
-            );
+            ),
+);
           }).toList(),
         );
           },
@@ -1479,10 +1504,14 @@ class _LostListState extends State<_LostList> {
             if (docs.isEmpty) return widget.filter.empty('迷子情報');
 
             return Column(
-              children: docs.map((doc) {
+              children: docs.asMap().entries.map((entry) {
+final doc = entry.value;
                 final data = doc.data() as Map<String, dynamic>;
                 final isMinePost = data['uid'] == myUid;
-                return GestureDetector(
+                return FadeSlideIn(
+  key: ValueKey(doc.id),
+  index: entry.key,
+  child: Pressable(
                   onTap: () => showLostPetDetail(context, data, doc.id),
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -1540,7 +1569,8 @@ class _LostListState extends State<_LostList> {
                       ],
                     ),
                   ),
-                );
+                ),
+);
               }).toList(),
             );
           },
@@ -1599,9 +1629,13 @@ class _VolunteerList extends StatelessWidget {
             .toList();
         if (docs.isEmpty) return filter.empty('ボランティア募集');
         return Column(
-          children: docs.map((doc) {
+          children: docs.asMap().entries.map((entry) {
+final doc = entry.value;
             final data = doc.data() as Map<String, dynamic>;
-            return GestureDetector(
+            return FadeSlideIn(
+  key: ValueKey(doc.id),
+  index: entry.key,
+  child: Pressable(
               onTap: () => VolunteerPage.showDetail(context, doc.id, data),
 
               child: _PhotoCard(
@@ -1613,7 +1647,8 @@ class _VolunteerList extends StatelessWidget {
                 title: data['title'] ?? '',
                 subtitle: (data['location'] ?? '').toString(),
               ),
-            );
+            ),
+);
           }).toList(),
         );
       },

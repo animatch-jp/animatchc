@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/activity_log.dart';
+import '../widgets/motion.dart';
 
 // 運営の画面：「続けて使ってくれている人」の割合（1日後・7日後・30日後）
 // activity/{uid} の「アプリを開いた日」から計算する
@@ -86,14 +87,15 @@ class _RetentionViewState extends State<RetentionView> {
     };
   }
 
-  Widget _stat(String label, String value) {
+  Widget _stat(String label, int value) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: Column(
           children: [
-            Text(value,
+            CountUp(
+                value: value,
                 style: const TextStyle(
                     fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
             const SizedBox(height: 2),
@@ -129,11 +131,11 @@ class _RetentionViewState extends State<RetentionView> {
             padding: const EdgeInsets.all(16),
             children: [
               Row(children: [
-                _stat('記録のある人', '${m['total']}'),
+                _stat('記録のある人', m['total'] as int),
                 const SizedBox(width: 8),
-                _stat('今日開いた人', '${m['today']}'),
+                _stat('今日開いた人', m['today'] as int),
                 const SizedBox(width: 8),
-                _stat('7日間で開いた人', '${m['week']}'),
+                _stat('7日間で開いた人', m['week'] as int),
               ]),
               const SizedBox(height: 8),
               Text('この7日間に始めた人：${m['newWeek']}人',
@@ -145,7 +147,9 @@ class _RetentionViewState extends State<RetentionView> {
               Text('期間が終わった人だけで計算します。人数が少ないうちは、ぶれが大きいです。',
                   style: TextStyle(fontSize: 11, color: Colors.grey[600])),
               const SizedBox(height: 10),
-              ...rows.map((r) => Container(
+              ...rows.asMap().entries.map((e) => FadeSlideIn(index: e.key, child: Builder(builder: (_) {
+                final r = e.value;
+                return Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
@@ -158,19 +162,29 @@ class _RetentionViewState extends State<RetentionView> {
                               child: Text(r.label,
                                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                             ),
-                            Text(r.eligible == 0 ? 'まだ計算できません' : '${(r.rate * 100).toStringAsFixed(0)}%',
-                                style: const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFFE8845A))),
+                            r.eligible == 0
+                                ? const Text('まだ計算できません',
+                                    style: TextStyle(fontSize: 13, color: Colors.grey))
+                                : CountUp(
+                                    value: (r.rate * 100).round(),
+                                    suffix: '%',
+                                    style: const TextStyle(
+                                        fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFFE8845A))),
                           ],
                         ),
                         const SizedBox(height: 6),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: r.rate,
-                            minHeight: 8,
-                            backgroundColor: const Color(0xFFF3E8E1),
-                            color: const Color(0xFFE8845A),
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: r.rate),
+                            duration: const Duration(milliseconds: 900),
+                            curve: Curves.easeOutCubic,
+                            builder: (_, v, __) => LinearProgressIndicator(
+                              value: v,
+                              minHeight: 8,
+                              backgroundColor: const Color(0xFFF3E8E1),
+                              color: const Color(0xFFE8845A),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -178,7 +192,8 @@ class _RetentionViewState extends State<RetentionView> {
                             style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                       ],
                     ),
-                  )),
+                  );
+              }))),
               const SizedBox(height: 8),
               Text('記録しているのは「アプリを開いた日」だけです（プライバシーポリシーに書いてあります）。',
                   style: TextStyle(fontSize: 11, color: Colors.grey[500])),
