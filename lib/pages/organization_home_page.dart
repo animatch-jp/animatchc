@@ -15,6 +15,7 @@ import 'volunteer_page.dart';
 import 'adoption_page.dart';
 import 'org_posts.dart';
 import '../widgets/account_menu_button.dart';
+import '../widgets/share_card.dart';
 
 class OrganizationHomePage extends StatefulWidget {
   const OrganizationHomePage({super.key});
@@ -735,6 +736,24 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                                   () => _deletePost(collection: 'adoptions', docId: docId,
                                       label: (data['petName'] ?? '').toString()),
                                 ),
+                                if ((data['imageUrl'] ?? '').toString().isNotEmpty && !isAdopted)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      onPressed: () => ShareCard.open(
+                                        context,
+                                        imageUrl: data['imageUrl'] as String,
+                                        title: '${data['petName'] ?? ''}（${data['type'] ?? ''}）',
+                                        subtitle: (data['personality'] ?? '').toString(),
+                                        label: '🐾 里親さん募集中',
+                                        footer: (_orgData?['name'] ?? '').toString(),
+                                        color: const Color(0xFF2D6A4F),
+                                      ),
+                                      icon: const Icon(Icons.ios_share_rounded, size: 16),
+                                      label: const Text('画像にして団体のSNSでシェア', style: TextStyle(fontSize: 12)),
+                                      style: TextButton.styleFrom(foregroundColor: const Color(0xFF2D6A4F)),
+                                    ),
+                                  ),
                                 const SizedBox(height: 8),
                                 SizedBox(
                                   width: double.infinity,

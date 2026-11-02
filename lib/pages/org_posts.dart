@@ -6,6 +6,7 @@ import '../services/blocked_users.dart';
 import '../services/cloudinary_service.dart';
 import '../services/content_filter.dart';
 import '../widgets/verified_org_mark.dart';
+import '../widgets/share_card.dart';
 import 'organization_profile_page.dart';
 import 'report_page.dart';
 
@@ -348,6 +349,13 @@ class OrgPostCard extends StatelessWidget {
                           orgId: orgId, orgName: orgName, docId: docId, initial: data);
                     } else if (v == 'delete') {
                       await OrgPosts.confirmDelete(context, docId);
+                    } else if (v == 'share') {
+                      await ShareCard.open(context,
+                          imageUrl: img,
+                          title: orgName,
+                          subtitle: text,
+                          label: '${OrgPosts.kindEmoji[kind] ?? ''} ${OrgPosts.kinds[kind] ?? 'お知らせ'}',
+                          color: const Color(0xFF2D6A4F));
                     } else if (v == 'report') {
                       Navigator.push(
                         context,
@@ -364,9 +372,11 @@ class OrgPostCard extends StatelessWidget {
                     }
                   },
                   itemBuilder: (_) => mine
-                      ? const [
-                          PopupMenuItem(value: 'edit', child: Text('内容を直す')),
-                          PopupMenuItem(value: 'delete', child: Text('消す')),
+                      ? [
+                          const PopupMenuItem(value: 'edit', child: Text('内容を直す')),
+                          if (img.isNotEmpty)
+                            const PopupMenuItem(value: 'share', child: Text('画像にしてシェア')),
+                          const PopupMenuItem(value: 'delete', child: Text('消す')),
                         ]
                       : const [PopupMenuItem(value: 'report', child: Text('この投稿を通報する'))],
                 ),

@@ -24,6 +24,7 @@ dependencies:
   firebase_crashlytics: ^4.3.10
   in_app_review: ^2.0.11
   url_launcher: ^6.3.0
+  share_plus: ">=11.0.0 <13.0.0"
 
 flutter:
   uses-material-design: true

@@ -14,6 +14,7 @@ import 'ranking_page.dart';
 import '../widgets/badge_celebration.dart';
 import 'report_page.dart';
 import '../services/blocked_users.dart';
+import '../widgets/share_card.dart';
 
 
 
@@ -83,6 +84,27 @@ void showPostDetail(BuildContext context, String postId) {
                               if ((data['comment'] ?? '').toString().isNotEmpty) ...[
                                 const SizedBox(height: 16),
                                 Text(data['comment'], style: const TextStyle(fontSize: 15, height: 1.5)),
+                              ],
+                              // 自分の投稿だけ：ロゴ入りの画像にしてシェア
+                              if (data['uid'] == FirebaseAuth.instance.currentUser?.uid &&
+                                  (data['imageUrl'] ?? '').toString().isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: () => ShareCard.open(
+                                    context,
+                                    imageUrl: data['imageUrl'] as String,
+                                    title: (data['petName'] ?? 'うちの子').toString(),
+                                    subtitle: (data['comment'] ?? '').toString(),
+                                    label: (data['theme'] ?? '').toString(),
+                                  ),
+                                  icon: const Icon(Icons.ios_share_rounded, size: 18),
+                                  label: const Text('画像にしてシェア'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFE8845A),
+                                    side: const BorderSide(color: Color(0xFFE8845A)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
                               ],
                               const SizedBox(height: 24),
                               StreamBuilder<DocumentSnapshot>(
