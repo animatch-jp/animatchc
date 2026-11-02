@@ -106,8 +106,13 @@ service cloud.firestore {
       return !(k in request.resource.data)
         || (k in resource.data && request.resource.data[k] == resource.data[k]);
     }
+    // 運営や公式のふりをする名前は使えない（アプリの「名前のきまり」と同じ言葉）
+    function nameOk(n) {
+      return n is string && !n.lower().replace('\\s', '').matches('.*(運営|公式|管理者|スタッフ|animatch|アニマッチ|admin|official|staff).*');
+    }
     function profileOk() {
-      return strMaxIfChanged('name', 20) && strMaxIfChanged('bio', 300) && strMaxIfChanged('motto', 30)
+      return (!changed('name') || nameOk(request.resource.data.name))
+        && strMaxIfChanged('name', 20) && strMaxIfChanged('bio', 300) && strMaxIfChanged('motto', 30)
         && strMaxIfChanged('prefecture', 10) && strMaxIfChanged('animal', 200) && strMaxIfChanged('gender', 20)
         && strMaxIfChanged('relation', 20) && strMaxIfChanged('profileImageUrl', 500)
         && (!changed('interests') || (request.resource.data.interests is list && request.resource.data.interests.size() <= 20))
@@ -126,7 +131,9 @@ service cloud.firestore {
         && (!('age' in request.resource.data) || ageValid(userId))
         && !request.resource.data.keys().hasAny(['email', 'fcmToken', 'gender', 'suspended', 'suspendedAt', 'cancelCount', 'eventSuspendedUntil'])
         && strMax(request.resource.data, 'name', 20) && strMax(request.resource.data, 'bio', 300)
-        && strMax(request.resource.data, 'motto', 30);
+        && strMax(request.resource.data, 'motto', 30)
+        && request.resource.data.name is string && request.resource.data.name.size() >= 1
+        && nameOk(request.resource.data.name);
       // 本人：自分のプロフィールを直せる。ただし「一時停止」は自分では変えられない
       // 運営：「一時停止」と、その日時だけ変えられる
       allow update: if (request.auth != null && request.auth.uid == userId
@@ -252,10 +259,6 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.reporterId == request.auth.uid
         && strMax(request.resource.data, 'reason', 50) && strMax(request.resource.data, 'comment', 1000);
       allow update, delete: if request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-    match /footprints/{userId}/visitors/{visitorId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == visitorId;
     }
     match /notifications/{userId}/items/{itemId} {
       // 自分あての通知だけ読める
