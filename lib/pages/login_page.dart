@@ -219,7 +219,7 @@ await FirebaseFirestore.instance
 'lastSeen': FieldValue.serverTimestamp(),
 });
 // 通知の鍵は、本人しか読めない場所に保存する
-if (fcmToken != null) await PrivateAccount.saveFcmToken(uid, fcmToken);
+if (fcmToken != null && uid != null) await PrivateAccount.saveFcmToken(uid, fcmToken);
 
 
 if (mounted) {
