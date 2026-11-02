@@ -3,6 +3,7 @@ import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_page.dart';
+import 'org_posts.dart';
 
 class OrganizationProfilePage extends StatelessWidget {
   final String orgId;
@@ -133,6 +134,16 @@ class OrganizationProfilePage extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+                if (isApproved) ...[
+                  const SizedBox(height: 28),
+                  const Text('お知らせ・活動報告',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF3D2B1F))),
+                  const SizedBox(height: 10),
+                  OrgPostList(orgId: orgId),
                 ],
               ],
             ),

@@ -464,6 +464,25 @@ service cloud.firestore {
         && adoptionOk(request.resource.data);
       allow delete: if request.auth != null && (request.auth.uid == resource.data.orgId || isAdmin());
     }
+    // 団体のお知らせ・活動報告：運営が確認した団体だけが出せる。だれの投稿か（orgId・orgName）は変えられない
+    function orgPostOk(d) {
+      return d.keys().hasOnly(['orgId', 'orgName', 'kind', 'text', 'imageUrl', 'createdAt', 'updatedAt'])
+        && d.kind in ['news', 'report', 'event', 'help']
+        && d.text is string && d.text.size() >= 1 && d.text.size() <= 500
+        && strMax(d, 'imageUrl', 500);
+    }
+    match /orgPosts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if isApprovedOrg()
+        && request.resource.data.orgId == request.auth.uid
+        && request.resource.data.orgName == myOrgName()
+        && orgPostOk(request.resource.data);
+      allow update: if isApprovedOrg() && request.auth.uid == resource.data.orgId
+        && request.resource.data.orgId == resource.data.orgId
+        && request.resource.data.orgName == resource.data.orgName
+        && orgPostOk(request.resource.data);
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.orgId || isAdmin());
+    }
     match /volunteers/{volunteerId} {
       allow read: if request.auth != null;
       allow create: if isApprovedOrg()

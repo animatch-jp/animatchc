@@ -128,6 +128,13 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
             () => _deleteAll(_db.collection('adoptions').where('orgId', isEqualTo: uid)));
     await _safe('volunteers',
             () => _deleteAll(_db.collection('volunteers').where('orgId', isEqualTo: uid)));
+    await _safe('orgPosts',
+            () => _deleteAll(_db.collection('orgPosts').where('orgId', isEqualTo: uid)));
+    // 団体・病院の、本人と運営だけが読める情報（メールアドレスなど）
+    await _safe('orgPrivate',
+            () => _deleteAll(_db.collection('organizations').doc(uid).collection('private')));
+    await _safe('hospitalPrivate',
+            () => _deleteAll(_db.collection('hospitals').doc(uid).collection('private')));
     await _safe('organizations',
             () => _db.collection('organizations').doc(uid).delete());
     await _safe('hospitals', () => _db.collection('hospitals').doc(uid).delete());
@@ -284,6 +291,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
               Text(
                   '・アカウント、プロフィール、ペットの情報、投稿、チャット履歴が削除されます\n'
                       '・削除後は元に戻せません\n'
+                      '・団体・病院のアカウントでは、団体（病院）のページと、里親募集・ボランティア募集・お知らせも削除されます\n'
                       '・主催したイベントが残っている場合は、先にイベントを削除してください',
                   style: TextStyle(
                       fontSize: 13, color: Colors.orange, height: 1.6)),

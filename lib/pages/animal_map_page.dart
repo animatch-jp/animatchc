@@ -1,3 +1,4 @@
+import 'org_posts.dart';
 import 'package:flutter/material.dart';
 import '../widgets/verified_org_mark.dart';
 import '../widgets/animaru_loading.dart';
@@ -98,7 +99,15 @@ backgroundColor: const Color(0xFFFFF8F5),
 elevation: 0,
 ),
 body: _category == 'all'
-? _TimelineList(header: _chips(), footer: const _ImpactCard())
+? _TimelineList(
+    header: _chips(),
+    footer: const Column(children: [
+      Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: LatestOrgPosts(key: ValueKey('latestOrgPosts')),
+      ),
+      _ImpactCard(),
+    ]))
 : Column(
 children: [
 const Padding(
@@ -159,7 +168,7 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
     child: ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
-        if (_category == 'org') const _OrgList(),
+        if (_category == 'org') ...const [LatestOrgPosts(limit: 3), _OrgList()],
         if (_category == 'adoption') const _AdoptionList(),
         if (_category == 'lost') const _LostList(),
         if (_category == 'volunteer') const _VolunteerList(),

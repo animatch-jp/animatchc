@@ -7,6 +7,7 @@ import 'hospital_tags.dart';
 import 'login_page.dart';
 import '../services/cloudinary_service.dart';
 import 'notification_page.dart';
+import '../widgets/account_menu_button.dart';
 
 
 class HospitalHomePage extends StatefulWidget {
@@ -131,6 +132,7 @@ class _HospitalHomePageState extends State<HospitalHomePage> {
         automaticallyImplyLeading: false,
         actions: [
           const NotificationBellButton(color: Color(0xFF4DA8DA)),
+          const AccountMenuButton(color: Color(0xFF4DA8DA)),
           IconButton(
             onPressed: () async {
               final confirm = await showDialog<bool>(

@@ -13,6 +13,8 @@ import 'notification_page.dart';
 import 'lost_pet_page.dart';
 import 'volunteer_page.dart';
 import 'adoption_page.dart';
+import 'org_posts.dart';
+import '../widgets/account_menu_button.dart';
 
 class OrganizationHomePage extends StatefulWidget {
   const OrganizationHomePage({super.key});
@@ -407,6 +409,7 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
         actions: [
           const NotificationBellButton(),
           _chatIconWithBadge(),
+          const AccountMenuButton(),
           IconButton(
             onPressed: () async {
               final confirm = await showDialog<bool>(
@@ -593,6 +596,31 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(
+                  child: _SectionHeader(
+                      title: 'お知らせ・活動報告',
+                      hint: '団体のページと、どうぶつマップに出ます。譲渡会の告知やお礼などに'),
+                ),
+                TextButton.icon(
+                  onPressed: () => OrgPosts.openSheet(context,
+                      orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
+                      orgName: (_orgData?['name'] ?? '').toString()),
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('書く'),
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFF2D6A4F)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            OrgPostList(
+              orgId: FirebaseAuth.instance.currentUser?.uid ?? '',
+              limit: 5,
+              emptyText: 'まだ投稿はありません。「書く」から、最初のお知らせを出してみましょう',
             ),
             const SizedBox(height: 24),
             const _SectionHeader(

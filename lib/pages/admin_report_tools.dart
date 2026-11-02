@@ -21,7 +21,7 @@ const int hotReportThreshold = 3;
 /* ---------------- 通報の comment の読み取り ---------------- */
 
 // 投稿の通報のとき、comment の「場所: ...」から、消してよい投稿の場所を取り出す。
-// 質問・回答・イベントのチャットのメッセージ以外は、消せないようにする。
+// 質問・回答・イベントのチャットのメッセージ・コメント・団体のお知らせ以外は、消せないようにする。
 String? reportedContentPath(dynamic comment) {
   if (comment is! String || !comment.startsWith('[')) return null;
   final match = RegExp(r'^場所: (\S+)$', multiLine: true).firstMatch(comment);
@@ -30,7 +30,8 @@ String? reportedContentPath(dynamic comment) {
   const id = r'[A-Za-z0-9_-]+';
   final allowed = RegExp('^questions/$id(/answers/$id)?\$').hasMatch(path) ||
       RegExp('^events/$id/messages/$id\$').hasMatch(path) ||
-      RegExp('^petBrags/$id/comments/$id\$').hasMatch(path);
+      RegExp('^petBrags/$id/comments/$id\$').hasMatch(path) ||
+      RegExp('^orgPosts/$id\$').hasMatch(path);
   return allowed ? path : null;
 }
 
