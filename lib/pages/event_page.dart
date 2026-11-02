@@ -1479,10 +1479,6 @@ class _EventPageState extends State<EventPage> {
       Map<String, dynamic> event, bool isJoined) async {
     final myUid = FirebaseAuth.instance.currentUser?.uid;
     if (myUid == null) return;
-    final myDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(myUid)
-        .get();
     final age = await AgeUtils.myAge() ?? 0;
     if (age < 18) {
       if (sheetContext.mounted) Navigator.pop(sheetContext);

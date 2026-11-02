@@ -5,7 +5,6 @@ import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'root_page.dart';
 import 'profile_setup_page3.dart';
 import '../services/age_utils.dart';
 
