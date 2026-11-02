@@ -558,8 +558,34 @@ class _TimelineTile extends StatelessWidget {
 }
 
 // 「AniMatchのこれまで」: 件数が1つでもあるときだけ表示（0・0・0は出さない）
-class _ImpactCard extends StatelessWidget {
+class _ImpactCard extends StatefulWidget {
   const _ImpactCard();
+
+  @override
+  State<_ImpactCard> createState() => _ImpactCardState();
+}
+
+class _ImpactCardState extends State<_ImpactCard> {
+  // 件数だけを数える（全部の投稿を読まないので、軽くて安い）。開いたときに1回だけ
+  late final Future<List<int>> _counts = _load();
+
+  static Future<int> _count(Query<Map<String, dynamic>> q) async {
+    try {
+      final r = await q.count().get();
+      return r.count ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static Future<List<int>> _load() {
+    final db = FirebaseFirestore.instance;
+    return Future.wait([
+      _count(db.collection('adoptions').where('status', isEqualTo: 'adopted')),
+      _count(db.collection('lostPets').where('status', isEqualTo: 'resolved')),
+      _count(db.collection('volunteers').where('status', isEqualTo: 'open')),
+    ]);
+  }
 
   Widget _stat(String emoji, int count, String label) {
     return Column(
@@ -574,55 +600,38 @@ class _ImpactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('adoptions')
-          .where('status', isEqualTo: 'adopted')
-          .snapshots(),
-      builder: (context, adoptedSnap) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('lostPets')
-              .where('status', isEqualTo: 'resolved')
-              .snapshots(),
-          builder: (context, resolvedSnap) {
-            return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collectionGroup('interested').snapshots(),
-              builder: (context, interestedSnap) {
-                final adopted = adoptedSnap.data?.docs.length ?? 0;
-                final resolved = resolvedSnap.data?.docs.length ?? 0;
-                final interested = interestedSnap.data?.docs.length ?? 0;
-                if (adopted + resolved + interested == 0) return const SizedBox();
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Color(0xFF2D6A4F), Color(0xFF52B788)]),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('🐾 AniMatchのこれまで',
-                            style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _stat('🏠', adopted, '里親決定'),
-                            _stat('🔍', resolved, '再会できた'),
-                            _stat('🤝', interested, 'ボランティア興味'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+    return FutureBuilder<List<int>>(
+      future: _counts,
+      builder: (context, snap) {
+        final c = snap.data ?? const [0, 0, 0];
+        final adopted = c[0], resolved = c[1], volunteers = c[2];
+        if (adopted + resolved + volunteers == 0) return const SizedBox();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF2D6A4F), Color(0xFF52B788)]),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('🐾 AniMatchのこれまで',
+                    style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _stat('🏠', adopted, '里親決定'),
+                    _stat('🔍', resolved, '再会できた'),
+                    _stat('🤝', volunteers, 'ボランティア募集中'),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

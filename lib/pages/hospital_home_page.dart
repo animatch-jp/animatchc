@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'prefectures.dart';
@@ -29,6 +30,7 @@ class _HospitalHomePageState extends State<HospitalHomePage> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     final doc = await FirebaseFirestore.instance.collection('hospitals').doc(uid).get();
+    PrivateAccount.moveContactEmail('hospitals', uid, doc.data());
     if (mounted) {
       setState(() {
         _data = doc.data();

@@ -100,7 +100,6 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
           'age': age,
           'prefecture': widget.prefecture,
           'animal': widget.animal,
-          'gender': widget.gender,
           'bio': _bioCtrl.text.trim(),
           'motto': _mottoCtrl.text.trim(),
           'relation': _selectedRelation,
@@ -112,12 +111,12 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
           'profileImageUrl': widget.profileImageUrl ?? '',
         });
 // メールアドレスは、本人しか読めない場所に保存する（みんなが読めるプロフィールには入れない）
-        if (user.email != null) {
-          batch.set(PrivateAccount.userRef(user.uid), {
-            'email': user.email,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
+        // 性別も、本人しか読めない場所に置く（ほかの人には見せない）
+        batch.set(PrivateAccount.userRef(user.uid), {
+          if (user.email != null) 'email': user.email,
+          if (widget.gender != null) 'gender': widget.gender,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
 // 生年月日は、本人しか読めない場所に保存する
         if (widget.birthDate != null) {
           batch.set(

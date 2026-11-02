@@ -20,7 +20,7 @@ class PrivateAccount {
     } catch (_) {}
   }
 
-  /// 前の版で、みんなが読めるプロフィールに入っていたメールと通知の鍵を、本人だけの場所へ移す
+  /// 前の版で、みんなが読めるプロフィールに入っていたメール・通知の鍵・性別を、本人だけの場所へ移す
   static Future<void> moveOldFields(String uid) async {
     try {
       final ref = FirebaseFirestore.instance.collection('users').doc(uid);
@@ -29,17 +29,33 @@ class PrivateAccount {
       if (d == null) return;
       final hasEmail = d.containsKey('email');
       final hasToken = d.containsKey('fcmToken');
-      if (!hasEmail && !hasToken) return;
+      final hasGender = d.containsKey('gender');
+      if (!hasEmail && !hasToken && !hasGender) return;
       final keep = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
       if (hasEmail && d['email'] is String) keep['email'] = d['email'];
       if (hasToken && d['fcmToken'] is String && (d['fcmToken'] as String).isNotEmpty) {
         keep['fcmToken'] = d['fcmToken'];
       }
+      if (hasGender && d['gender'] is String) keep['gender'] = d['gender'];
       await userRef(uid).set(keep, SetOptions(merge: true));
       await ref.update({
         if (hasEmail) 'email': FieldValue.delete(),
         if (hasToken) 'fcmToken': FieldValue.delete(),
+        if (hasGender) 'gender': FieldValue.delete(),
       });
+    } catch (_) {}
+  }
+
+  /// 前の版で、団体・病院の本体（みんなが読める）に入っていたメールを、本人と運営だけの場所へ移す
+  static Future<void> moveContactEmail(String collection, String id, Map<String, dynamic>? data) async {
+    final e = data?['email'];
+    if (data == null || !data.containsKey('email')) return;
+    try {
+      if (e is String && e.isNotEmpty) {
+        await contactRef(collection, id).set({'email': e, 'updatedAt': FieldValue.serverTimestamp()},
+            SetOptions(merge: true));
+      }
+      await FirebaseFirestore.instance.collection(collection).doc(id).update({'email': FieldValue.delete()});
     } catch (_) {}
   }
 

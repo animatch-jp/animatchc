@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -96,6 +97,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final _animalStr = widget.userData['animal'] as String? ?? '';
     _selectedAnimals = _animalStr.isEmpty ? [] : _animalStr.split('、');
     _selectedGender = widget.userData['gender'];
+    // 性別は本人しか読めない場所にあるので、そこから読む（前の版のデータは userData のまま）
+    final me = FirebaseAuth.instance.currentUser?.uid;
+    if (me != null) {
+      PrivateAccount.userRef(me).get().then((s) {
+        final g = s.data()?['gender'];
+        if (g is String && mounted) setState(() => _selectedGender = g);
+      }).catchError((_) {});
+    }
     _selectedRelation = widget.userData['relation'];
     _selectedInterests = List<String>.from(widget.userData['interests'] ?? []);
     _selectedSpots = List<String>.from(widget.userData['spots'] ?? []);
@@ -291,7 +300,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
           'name': _nameCtrl.text.trim(),
           'prefecture': _selectedPrefecture,
           'animal': _selectedAnimals.join('、'),
-          'gender': _selectedGender,
+          // 性別は、本人しか読めない場所に置く（ほかの人には見せない）
+          'gender': FieldValue.delete(),
           'bio': _bioCtrl.text.trim(),
           'motto': _mottoCtrl.text.trim(),
           'relation': _selectedRelation,
@@ -309,6 +319,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
           });
         }
         batch.update(userRef, updates);
+        batch.set(PrivateAccount.userRef(user.uid), {
+          'gender': _selectedGender,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
         await batch.commit();
 
         if (mounted) {

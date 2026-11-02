@@ -2,6 +2,7 @@ import 'dart:async';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
+import '../services/private_account.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_page.dart';
@@ -54,6 +55,7 @@ class _OrganizationHomePageState extends State<OrganizationHomePage> {
         .collection('organizations')
         .doc(uid)
         .get();
+    PrivateAccount.moveContactEmail('organizations', uid, doc.data());
     if (mounted) {
       setState(() {
         _orgData = doc.data();

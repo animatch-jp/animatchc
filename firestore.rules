@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── v12（2026-11-02）：①メール・通知の鍵を、みんなが読めるプロフィールに置けない（本人と運営だけが読める private へ）
+    // ── v12（2026-11-02）：①メール・通知の鍵・性別を、みんなが読めるプロフィールに置けない（本人と運営だけが読める private へ）
     //    ②団体・病院は「審査待ち」でしか登録できない。団体名・病院名・審査の状態は自分で変えられない
     //    ③ペット自慢は票0から。迷子・質問・回答・コメント・イベント・通報・お問い合わせ・通知に文字数の上限
     //    ④「公式」イベント・団体の迷子の印・運営からの通知は、本当の運営・団体だけ ⑤使っていない場所（reviews）を閉じる ──
@@ -124,14 +124,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId
         && (!('age' in request.resource.data) || ageValid(userId))
-        && !request.resource.data.keys().hasAny(['email', 'fcmToken', 'suspended', 'suspendedAt', 'cancelCount', 'eventSuspendedUntil'])
+        && !request.resource.data.keys().hasAny(['email', 'fcmToken', 'gender', 'suspended', 'suspendedAt', 'cancelCount', 'eventSuspendedUntil'])
         && strMax(request.resource.data, 'name', 20) && strMax(request.resource.data, 'bio', 300)
         && strMax(request.resource.data, 'motto', 30);
       // 本人：自分のプロフィールを直せる。ただし「一時停止」は自分では変えられない
       // 運営：「一時停止」と、その日時だけ変えられる
       allow update: if (request.auth != null && request.auth.uid == userId
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['suspended', 'suspendedAt'])
-        && noNewSecret('email') && noNewSecret('fcmToken') && profileOk()
+        && noNewSecret('email') && noNewSecret('fcmToken') && noNewSecret('gender') && profileOk()
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['age'])
             || ageValid(userId))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cancelCount'])
