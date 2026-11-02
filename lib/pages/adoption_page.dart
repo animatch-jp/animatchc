@@ -152,6 +152,7 @@ class AdoptionPage extends StatelessWidget {
             .collection('adoptions')
             .where('status', isEqualTo: 'available')
             .orderBy('createdAt', descending: true)
+            .limit(100) // 読みこみ回数をおさえる（新しい100件まで）
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {

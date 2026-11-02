@@ -370,6 +370,7 @@ class _LostPetPageState extends State<LostPetPage> {
               stream: FirebaseFirestore.instance
                   .collection('lostPets')
                   .orderBy('createdAt', descending: true)
+                  .limit(100) // 読みこみ回数をおさえる（新しい100件まで）
                   .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {

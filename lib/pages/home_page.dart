@@ -192,13 +192,15 @@ class _QuestionBoardPreview extends StatelessWidget {
                   child: Text('質問掲示板',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                 ),
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
+                // 未解決の数だけを数える（全部の質問を読まない。1000件まで1回分の読みこみ）
+                FutureBuilder<AggregateQuerySnapshot>(
+                  future: FirebaseFirestore.instance
                       .collection('questions')
                       .where('solved', isEqualTo: false)
-                      .snapshots(),
+                      .count()
+                      .get(),
                   builder: (context, snapshot) {
-                    final count = snapshot.hasData ? snapshot.data!.docs.length : 0;
+                    final count = snapshot.data?.count ?? 0;
                     if (count == 0) return const SizedBox();
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
