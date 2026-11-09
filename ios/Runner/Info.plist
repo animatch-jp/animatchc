@@ -45,8 +45,6 @@
 	<string>プロフィールやペットの写真、投稿やチャットに使う写真を選ぶために、写真ライブラリを使います。</string>
 	<key>NSCameraUsageDescription</key>
 	<string>プロフィールやペットの写真を撮るために、カメラを使います。</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>動画を撮るときに、マイクを使うことがあります。</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
