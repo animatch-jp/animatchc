@@ -14,6 +14,26 @@ service cloud.firestore {
     // ── v8（2026-11-01）：運営（admins）ができることを足し、イベントのチャットを安全にした ──
 
     // 運営（admins に入っている人）かどうか
+    // 自分のプロフィールの名前（なりすまし防止。名前を書く場所は、これと同じ名前だけにする）
+    function myProfileName(dflt) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('name', dflt);
+    }
+    // リアクションと投票：ほかの人の分は変えられない。変えてよいのは、自分のuidを足す・外すことだけ
+    function reactionKeyOk(a, b, k) {
+      return a.get(k, []) is list
+        && a.get(k, []).toSet().difference(b.get(k, []).toSet()).hasOnly([request.auth.uid])
+        && b.get(k, []).toSet().difference(a.get(k, []).toSet()).hasOnly([request.auth.uid]);
+    }
+    function reactionsOk() {
+      let a = request.resource.data.get('reactions', {});
+      let b = resource.data.get('reactions', {});
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+        && a.diff(b).affectedKeys().hasOnly(['paw', 'love', 'laugh', 'good', 'thanks', 'opt0', 'opt1', 'opt2', 'opt3'])
+        && reactionKeyOk(a, b, 'paw') && reactionKeyOk(a, b, 'love') && reactionKeyOk(a, b, 'laugh')
+        && reactionKeyOk(a, b, 'good') && reactionKeyOk(a, b, 'thanks')
+        && reactionKeyOk(a, b, 'opt0') && reactionKeyOk(a, b, 'opt1')
+        && reactionKeyOk(a, b, 'opt2') && reactionKeyOk(a, b, 'opt3');
+    }
     function isAdmin() {
       return request.auth != null
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
@@ -138,12 +158,7 @@ service cloud.firestore {
         && (!changed('spots') || (request.resource.data.spots is list && request.resource.data.spots.size() <= 20));
     }
 
-    match /{path=**}/liked/{targetId} {
-      allow read: if request.auth != null;
-    }
-    match /{path=**}/favorited/{targetId} {
-      allow read: if request.auth != null;
-    }
+    // likes・favorited は本人だけが読める（ほかの人の「いいね」の中身を、まとめて読めないように閉じた）
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId
@@ -171,9 +186,17 @@ service cloud.firestore {
         request.auth.uid == userId ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
+      // ペットの紹介は、ほかの人にも見えるので、文字数の上限をつける
+      function petOk(d) {
+        return strMax(d, 'name', 20) && strMax(d, 'type', 30) && strMax(d, 'age', 20)
+          && strMax(d, 'bio', 300) && strMax(d, 'imageUrl', 500)
+          && (!('tags' in d) || (d.tags is list && d.tags.size() <= 20));
+      }
       match /pets/{petId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId
+          && petOk(request.resource.data);
+        allow delete: if request.auth != null && request.auth.uid == userId;
 
         // 毎日のお世話（ごはん・散歩など）は、本人だけが読める
         match /tasks/{taskId} {
@@ -223,11 +246,11 @@ service cloud.firestore {
       }
     }
     match /likes/{userId}/liked/{targetId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     match /favorites/{userId}/favorited/{targetId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     // 1対1のチャット（チャットのIDは、2人のuidを並べて _ でつないだもの）に、自分が入っているか
@@ -365,11 +388,13 @@ service cloud.firestore {
         && request.resource.data.organizerUid == request.auth.uid
         && isAdultUser(request.auth.uid)
         && (request.resource.data.get('isOfficial', false) == false || isAdmin())
+        && request.resource.data.get('organizerName', '') in [myProfileName(''), '']
         && eventOk(request.resource.data);
       allow update: if request.auth != null && (
         (resource.data.organizerUid == request.auth.uid
           && request.resource.data.organizerUid == resource.data.organizerUid
           && (!changed('isOfficial') || isAdmin())
+          && (!changed('organizerName') || request.resource.data.organizerName == myProfileName(''))
           && eventOk(request.resource.data)) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
           && (request.resource.data.participantCount - resource.data.participantCount) in [-1, 1])
@@ -393,18 +418,29 @@ service cloud.firestore {
       match /messages/{messageId} {
         // 読める：参加者・主催者・運営（通報の確認のため）
         allow read: if isEventMember(eventId) || isAdmin();
-        // 送れる：参加者・主催者。送り主は自分の名前でだけ（「〜さんが参加しました」のお知らせは例外）
+        // 送れる：参加者・主催者。送り主は自分・名前は自分のプロフィールの名前だけ
+        // 「〜さんが参加しました🐾」のお知らせは、自分の名前の形のときだけ送れる（好きな文をお知らせにできない）
         allow create: if isEventMember(eventId) && (
-          request.resource.data.senderUid == request.auth.uid ||
+          (request.resource.data.senderUid == request.auth.uid
+            && request.resource.data.get('isSystem', false) == false
+            && request.resource.data.get('senderName', '') in [myProfileName(''), '']) ||
           (request.resource.data.get('isSystem', false) == true
-            && request.resource.data.senderUid == 'system')
-        ) && strMax(request.resource.data, 'text', 1000) && strMax(request.resource.data, 'senderName', 30);
-        // 変えられる：自分のメッセージ（送り主は変えられない）。ほかの人のメッセージは、リアクションだけ
+            && request.resource.data.senderUid == 'system'
+            && request.resource.data.get('senderName', '') == 'システム'
+            && request.resource.data.get('text', '') == myProfileName('') + 'さんが参加しました🐾'
+            && !('type' in request.resource.data))
+        ) && strMax(request.resource.data, 'text', 1000) && strMax(request.resource.data, 'senderName', 30)
+          && (!('options' in request.resource.data)
+              || (request.resource.data.options is list && request.resource.data.options.size() <= 4))
+          && request.resource.data.get('reactions', {}).size() == 0;
+        // 変えられる：自分のメッセージ（送り主・名前・お知らせかどうか・種類は変えられない）
+        // ほかの人のメッセージは、リアクションと投票の「自分の分」だけ
         allow update: if isEventMember(eventId) && (
           (resource.data.senderUid == request.auth.uid
-            && request.resource.data.senderUid == resource.data.senderUid
+            && !changed('senderUid') && !changed('senderName') && !changed('isSystem') && !changed('type')
+            && !changed('reactions')
             && strMax(request.resource.data, 'text', 1000)) ||
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          reactionsOk()
         );
         // 消せる：自分のメッセージ・主催者・運営
         allow delete: if request.auth != null && (
@@ -471,7 +507,8 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
           && request.resource.data.text is string && request.resource.data.text.size() <= 200
-          && strMax(request.resource.data, 'name', 30);
+          && strMax(request.resource.data, 'name', 30)
+          && request.resource.data.get('name', '') == myProfileName('名無しさん');
         allow delete: if request.auth != null && (
           request.auth.uid == resource.data.uid ||
           request.auth.uid == get(/databases/$(database)/documents/petBrags/$(postId)).data.uid ||
@@ -654,9 +691,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
         && strMax(request.resource.data, 'title', 50) && strMax(request.resource.data, 'body', 500)
-        && strMax(request.resource.data, 'name', 30) && strMax(request.resource.data, 'imageUrl', 500);
+        && strMax(request.resource.data, 'name', 30) && strMax(request.resource.data, 'imageUrl', 500)
+        && request.resource.data.get('name', '') == myProfileName('名無しさん');
       allow update: if request.auth != null && request.auth.uid == resource.data.uid
-        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.uid == resource.data.uid && !changed('name')
         && strMax(request.resource.data, 'title', 50) && strMax(request.resource.data, 'body', 500);
       // 消せる：本人と運営（通報された質問を消すため）
       allow delete: if request.auth != null && (request.auth.uid == resource.data.uid || isAdmin());
@@ -667,7 +705,8 @@ service cloud.firestore {
         allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
           && request.resource.data.get('helpfulBy', []).size() == 0
           && request.resource.data.text is string && request.resource.data.text.size() <= 500
-          && strMax(request.resource.data, 'name', 30);
+          && strMax(request.resource.data, 'name', 30)
+          && request.resource.data.get('name', '') == myProfileName('名無しさん');
         // 回答への更新は「役に立った」の付け外しだけ。自分の回答には付けられない
         allow update: if request.auth != null
           && request.auth.uid != resource.data.uid

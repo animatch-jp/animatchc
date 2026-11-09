@@ -268,15 +268,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _EditField(label: '名前', ctrl: nameCtrl),
+                _EditField(label: '名前', ctrl: nameCtrl, maxLength: 20),
                 const SizedBox(height: 12),
-                _EditField(label: '種類', ctrl: typeCtrl),
+                _EditField(label: '種類', ctrl: typeCtrl, maxLength: 20),
                 const SizedBox(height: 12),
-                _EditField(label: '年齢', ctrl: ageCtrl,
+                _EditField(label: '年齢', ctrl: ageCtrl, maxLength: 20,
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 12),
-                _EditField(label: '自己紹介', ctrl: bioCtrl, maxLines: 3),
+                _EditField(label: '自己紹介', ctrl: bioCtrl, maxLines: 3, maxLength: 300),
                 const SizedBox(height: 16),
                 const Text('性格タグ',
                     style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1010,8 +1010,9 @@ class _EditField extends StatelessWidget {
   final TextInputType? keyboardType;
   final int maxLines;
   final List<TextInputFormatter>? inputFormatters;
+  final int? maxLength;
   const _EditField({required this.label, required this.ctrl,
-    this.keyboardType, this.maxLines = 1, this.inputFormatters});
+    this.keyboardType, this.maxLines = 1, this.inputFormatters, this.maxLength});
 
   @override
   Widget build(BuildContext context) {
@@ -1019,6 +1020,7 @@ class _EditField extends StatelessWidget {
       controller: ctrl,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
       inputFormatters: inputFormatters,
       decoration: InputDecoration(
         labelText: label,
@@ -1115,14 +1117,14 @@ class _AddPetSheetState extends State<_AddPetSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          _EditField(label: '名前', ctrl: _nameCtrl),
+          _EditField(label: '名前', ctrl: _nameCtrl, maxLength: 20),
           const SizedBox(height: 12),
-          _EditField(label: '種類', ctrl: _typeCtrl),
+          _EditField(label: '種類', ctrl: _typeCtrl, maxLength: 20),
           const SizedBox(height: 12),
-          _EditField(label: '年齢', ctrl: _ageCtrl,
+          _EditField(label: '年齢', ctrl: _ageCtrl, maxLength: 20,
               keyboardType: TextInputType.number),
           const SizedBox(height: 12),
-          _EditField(label: '自己紹介', ctrl: _bioCtrl, maxLines: 3),
+          _EditField(label: '自己紹介', ctrl: _bioCtrl, maxLines: 3, maxLength: 300),
           const SizedBox(height: 16),
           const Text('性格タグ',
               style: TextStyle(fontWeight: FontWeight.bold)),

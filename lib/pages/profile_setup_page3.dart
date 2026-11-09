@@ -441,7 +441,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
 
           // 名前
           TextField(
-              controller: _nameCtrl, decoration: _dec('ペットの名前 *')),
+              controller: _nameCtrl, maxLength: 20, decoration: _dec('ペットの名前 *')),
           const SizedBox(height: 12),
 
           // 動物の種類
@@ -485,6 +485,7 @@ class _PetFormSheetState extends State<_PetFormSheet> {
           // 年齢
           TextField(
               controller: _ageCtrl,
+              maxLength: 20,
               decoration: _dec('年齢（例：2歳・生後3ヶ月）')),
           const SizedBox(height: 12),
 
