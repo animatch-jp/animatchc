@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/motion.dart';
 import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -402,7 +403,7 @@ class _LostPetPageState extends State<LostPetPage> {
                     final data = docs[i].data() as Map<String, dynamic>;
                     final postId = docs[i].id;
                     final isMinePost = data['uid'] == myUid;
-                    return GestureDetector(
+                    return FadeSlideIn(index: i, child: Pressable(
                       onTap: () => showLostPetDetail(context, data, postId),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 14),
@@ -479,7 +480,7 @@ class _LostPetPageState extends State<LostPetPage> {
                           ),
                         ),
                       ),
-                    );
+                    ));
                   },
                 );
               },
@@ -673,7 +674,11 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      final root = Navigator.of(context, rootNavigator: true).context;
+      Navigator.pop(context);
+      showHappyBurst(root, message: '投稿しました', sub: '早く見つかりますように', emoji: '🔎', color: const Color(0xFF5B8DEF));
+    }
   }
   @override
   Widget build(BuildContext context) {

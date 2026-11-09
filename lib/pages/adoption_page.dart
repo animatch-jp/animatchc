@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/motion.dart';
 import '../widgets/verified_org_mark.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -173,7 +174,7 @@ class AdoptionPage extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (_, i) {
               final data = docs[i].data() as Map<String, dynamic>;
-              return GestureDetector(
+              return FadeSlideIn(index: i, child: Pressable(
                 onTap: () => showAdoptionDetail(context, data),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -251,7 +252,7 @@ class AdoptionPage extends StatelessWidget {
                     ],
                   ),
                 ),
-              );
+              ));
             },
           );
         },

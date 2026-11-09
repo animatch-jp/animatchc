@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/motion.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -290,7 +291,7 @@ class _NotificationPageState extends State<NotificationPage> {
           final type = notif['type'] as String? ?? 'like';
           final color = _typeColor(type);
 
-          return GestureDetector(
+          return FadeSlideIn(index: i, child: Pressable(
             onTap: () async {
               await _markAsRead(i);
               if (type == 'eventRemoved' && mounted) {
@@ -445,7 +446,7 @@ class _NotificationPageState extends State<NotificationPage> {
                 ],
               ),
             ),
-          );
+          ));
         },
       ),
     );

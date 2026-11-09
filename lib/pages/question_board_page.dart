@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/motion.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -180,7 +181,7 @@ class _QuestionList extends StatelessWidget {
             final questionId = docs[i].id;
             final solved = data['solved'] == true;
 
-            return GestureDetector(
+            return FadeSlideIn(index: i, child: Pressable(
               onTap: () => showQuestionDetail(context, questionId),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -259,7 +260,7 @@ class _QuestionList extends StatelessWidget {
                   ],
                 ),
               ),
-            );
+            ));
           },
         );
       },
@@ -319,7 +320,9 @@ class _PostQuestionSheetState extends State<_PostQuestionSheet> {
     });
 
     if (mounted) {
+      final root = Navigator.of(context, rootNavigator: true).context;
       Navigator.pop(context);
+      showHappyBurst(root, message: '質問を投稿しました', sub: 'みんなの回答を待ちましょう', emoji: '🙋');
     }
   }
   @override
@@ -734,7 +737,9 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
     }
 
     _answerCtrl.clear();
+    if (!mounted) return;
     setState(() => _isSending = false);
+    showHappyBurst(context, message: '回答しました', sub: '質問した人に届きます', emoji: '💬');
   }
 
   @override
