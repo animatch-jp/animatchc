@@ -328,10 +328,15 @@ service cloud.firestore {
         )
       );
       // 更新できるのは、①本人（既読にするなど） ②グループチャット通知の上書き（送り主が自分のとき）
+      // ②は、種類を groupChat のままにして、文字数の上限もつける（運営からの通知になりすませない）
       allow update: if request.auth != null && (
         request.auth.uid == userId ||
-        (itemId.matches('groupChat_.*') &&
-          request.resource.data.fromUid == request.auth.uid)
+        (itemId.matches('groupChat_.*')
+          && request.resource.data.get('fromUid', '') == request.auth.uid
+          && request.resource.data.get('senderUid', request.auth.uid) == request.auth.uid
+          && request.resource.data.get('type', '') == 'groupChat'
+          && itemId == 'groupChat_' + request.resource.data.get('eventId', '')
+          && strMax(request.resource.data, 'title', 100) && strMax(request.resource.data, 'desc', 300))
       );
       // 削除できるのは本人だけ
       allow delete: if request.auth != null && request.auth.uid == userId;
