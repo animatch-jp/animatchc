@@ -739,7 +739,6 @@ class _AnswerInputBarState extends State<_AnswerInputBar> {
     _answerCtrl.clear();
     if (!mounted) return;
     setState(() => _isSending = false);
-    showHappyBurst(context, message: '回答しました', sub: '質問した人に届きます', emoji: '💬');
   }
 
   @override

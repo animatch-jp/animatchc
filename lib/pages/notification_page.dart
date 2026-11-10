@@ -291,7 +291,7 @@ class _NotificationPageState extends State<NotificationPage> {
           final type = notif['type'] as String? ?? 'like';
           final color = _typeColor(type);
 
-          return FadeSlideIn(index: i, child: Pressable(
+          return Pressable(
             onTap: () async {
               await _markAsRead(i);
               if (type == 'eventRemoved' && mounted) {
@@ -446,7 +446,7 @@ class _NotificationPageState extends State<NotificationPage> {
                 ],
               ),
             ),
-          ));
+          );
         },
       ),
     );

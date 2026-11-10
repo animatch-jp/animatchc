@@ -17,7 +17,7 @@ class FadeSlideIn extends StatelessWidget {
     required this.child,
     this.index = 0,
     this.offset = 18,
-    this.duration = const Duration(milliseconds: 420),
+    this.duration = const Duration(milliseconds: 300),
   });
   final Widget child;
   final int index;
@@ -27,7 +27,8 @@ class FadeSlideIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (reduceMotion(context)) return child;
-    final delay = (index.clamp(0, 8)) * 70;
+    // 何度も開く画面で待たされないように、順番に出るずれは短く・最大でも 6 番目まで
+    final delay = (index.clamp(0, 6)) * 40;
     final total = duration.inMilliseconds + delay;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../widgets/motion.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/unread_service.dart';
@@ -414,7 +413,7 @@ class _ChatListPageState extends State<ChatListPage>
       itemCount: groups.length,
       itemBuilder: (_, i) {
         final g = groups[i];
-        return FadeSlideIn(index: i, child: ListTile(
+        return ListTile(
           leading: Container(
             width: 52,
             height: 52,
@@ -459,7 +458,7 @@ class _ChatListPageState extends State<ChatListPage>
                     builder: (_) => EventChatPage(
                         eventId: g.eventId, eventTitle: g.title)));
           },
-        ));
+        );
       },
     );
   }

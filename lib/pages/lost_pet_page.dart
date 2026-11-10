@@ -674,11 +674,7 @@ class _LostPetPostSheetState extends State<_LostPetPostSheet> {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    if (mounted) {
-      final root = Navigator.of(context, rootNavigator: true).context;
-      Navigator.pop(context);
-      showHappyBurst(root, message: '投稿しました', sub: '早く見つかりますように', emoji: '🔎', color: const Color(0xFF5B8DEF));
-    }
+    if (mounted) Navigator.pop(context);
   }
   @override
   Widget build(BuildContext context) {
