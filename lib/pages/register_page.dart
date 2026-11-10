@@ -3,6 +3,7 @@ import '../widgets/signup_decor.dart';
 import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'terms_page.dart';
@@ -118,6 +119,8 @@ class _RegisterPageState extends State<RegisterPage> {
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text.trim(),
       );
+      // 登録できたら、スマホに「パスワードを保存しますか」と聞いてもらう
+      TextInput.finishAutofillContext();
       await _recordConsent(cred.user?.uid);
       if (mounted) {
         Navigator.pushReplacement(context, signupRoute(const ProfileSetupPage()));
@@ -215,7 +218,7 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: StaggerColumn(
+              child: AutofillGroup(child: StaggerColumn(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('新規登録',
@@ -227,6 +230,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   TextField(
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email, AutofillHints.username],
                     decoration: InputDecoration(
                       labelText: 'メールアドレス',
                       prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFFE8A598)),
@@ -243,6 +247,8 @@ class _RegisterPageState extends State<RegisterPage> {
                     controller: _passCtrl,
                     focusNode: _passFocus,
                     obscureText: _obscurePassword,
+                    // スマホが強いパスワードを考えて、保存してくれる
+                    autofillHints: const [AutofillHints.newPassword],
                     decoration: InputDecoration(
                       labelText: 'パスワード（6文字以上）',
                       prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFE8A598)),
@@ -263,6 +269,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     controller: _confirmPassCtrl,
                     focusNode: _confirmFocus,
                     obscureText: _obscureConfirm,
+                    autofillHints: const [AutofillHints.newPassword],
                     decoration: InputDecoration(
                       labelText: 'パスワード確認',
                       prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFFE8A598)),
@@ -344,7 +351,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 32),
                 ],
-              ),
+              )),
             ),
           ],
         ),

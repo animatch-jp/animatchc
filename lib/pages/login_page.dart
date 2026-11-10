@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/private_account.dart';
 import '../widgets/animaru.dart';
 import '../widgets/animaru_guide.dart';
@@ -56,6 +57,23 @@ _emailCtrl.dispose();
 _passCtrl.dispose();
 _passFocus.dispose();
 super.dispose();
+}
+
+// メールアドレスを忘れた人への案内（アカウントを探す機能はないので、手がかりと問い合わせ先を出す）
+void _showEmailHelp() {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('メールアドレスを忘れたとき'),
+      content: const Text(
+          '・スマホにパスワードを保存していれば、メールアドレスの欄を押すと候補が出ます。\n'
+          '・よく使うメールアドレスを、1つずつ「パスワードを忘れた方」に入れてみてください。登録したアドレスなら、作り直しのメールが届きます。\n\n'
+          'それでもわからないときは、animatch.jp@gmail.com へ、アプリで使っていた名前とペットの名前を書いて送ってください。'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('とじる')),
+      ],
+    ),
+  );
 }
 
 void _showPasswordReset() {
@@ -152,6 +170,8 @@ password: _passCtrl.text.trim(),
 );
 
 final uid = userCredential.user?.uid;
+// ログインできたら、スマホに「パスワードを保存しますか」と聞いてもらう
+TextInput.finishAutofillContext();
 
 final orgDoc = await FirebaseFirestore.instance
     .collection('organizations')
@@ -294,7 +314,7 @@ Widget build(BuildContext context) {
 
           Padding(
             padding: const EdgeInsets.all(24),
-            child: StaggerColumn(
+            child: AutofillGroup(child: StaggerColumn(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('ログイン',
@@ -307,6 +327,8 @@ Widget build(BuildContext context) {
                 TextField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
+                  // スマホに保存したメールとパスワードを、自動で入れられるようにする
+                  autofillHints: const [AutofillHints.email, AutofillHints.username],
                   decoration: InputDecoration(
                     labelText: 'メールアドレス',
                     prefixIcon: const Icon(Icons.email_outlined,
@@ -327,6 +349,7 @@ Widget build(BuildContext context) {
                   controller: _passCtrl,
                   focusNode: _passFocus,
                   obscureText: _obscurePassword,
+                  autofillHints: const [AutofillHints.password],
                   decoration: InputDecoration(
                     labelText: 'パスワード',
                     prefixIcon: const Icon(Icons.lock_outline,
@@ -354,10 +377,20 @@ Widget build(BuildContext context) {
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => _showPasswordReset(),
-                    child: const Text('パスワードを忘れた方',
-                        style: TextStyle(color: Color(0xFFE8A598))),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => _showEmailHelp(),
+                        child: const Text('メールアドレスを忘れた方',
+                            style: TextStyle(color: Color(0xFFE8A598))),
+                      ),
+                      TextButton(
+                        onPressed: () => _showPasswordReset(),
+                        child: const Text('パスワードを忘れた方',
+                            style: TextStyle(color: Color(0xFFE8A598))),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -432,7 +465,7 @@ Widget build(BuildContext context) {
                 const SizedBox(height: 32),
 
               ],
-            ),
+            )),
           ),
         ],
       ),

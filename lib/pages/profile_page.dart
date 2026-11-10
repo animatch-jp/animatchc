@@ -958,7 +958,12 @@ class _ProfilePageState extends State<ProfilePage> {
                           context: context,
                           builder: (_) => AlertDialog(
                             title: const Text('ログアウト'),
-                            content: const Text('ログアウトしますか？'),
+                            // もう一度入るときに困らないように、ログインに使うメールアドレスを見せる
+                            content: Text(
+                                'ログアウトしますか？\n\n'
+                                'もう一度ログインするときは、このメールアドレスとパスワードを使います。\n'
+                                '${FirebaseAuth.instance.currentUser?.email ?? ''}\n\n'
+                                'パスワードを忘れたときは、ログイン画面の「パスワードを忘れた方」から作り直せます。'),
                             actions: [
                               TextButton(
                                 onPressed: () =>
