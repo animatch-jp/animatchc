@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../widgets/motion.dart';
 
 import '../services/blocked_users.dart';
 import '../widgets/animaru.dart';
@@ -432,6 +433,8 @@ class _WeeklyRankingViewState extends State<WeeklyRankingView>
     );
   }
 
+  static bool _cheeredTop = false;
+
   Widget _myRank(List<_Entry> ranking) {
     final me = FirebaseAuth.instance.currentUser?.uid;
     if (me == null) return const SizedBox.shrink();
@@ -441,6 +444,16 @@ class _WeeklyRankingViewState extends State<WeeklyRankingView>
     String sub;
     if (i == 0) {
       sub = 'いま1位！このまま守りきろう';
+      // うちの子が1位になった、うれしいとき（アプリを開いているあいだに1回だけ）
+      if (!_cheeredTop) {
+        _cheeredTop = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            showHappyBurst(context, message: 'うちの子が1位！', sub: 'このまま守りきろう', emoji: '👑',
+                color: const Color(0xFFE0A526));
+          }
+        });
+      }
     } else {
       final diff = ranking[i - 1].score - e.score + 1;
       sub = 'あと$diff票で${i}位';

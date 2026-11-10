@@ -9,6 +9,7 @@ import 'delete_account_page.dart';
 import 'notification_settings_page.dart';
 import 'abuse_report_page.dart';
 import 'package:flutter/material.dart';
+import '../widgets/motion.dart';
 import 'notification_page.dart';
 import 'privacy_page.dart';
 import 'terms_page.dart';
@@ -169,6 +170,10 @@ class _ProfilePageState extends State<ProfilePage> {
         child: _AddPetSheet(onAdd: (pet) {
           setState(() => _pets.add(pet));
           Navigator.pop(context);
+          // 新しい家族がふえた、うれしいとき
+          showHappyBurst(context,
+              message: '${pet.name.isEmpty ? 'うちの子' : pet.name}を登録しました',
+              sub: 'これからよろしくね', emoji: '🐾');
         }),
       ),
     );
