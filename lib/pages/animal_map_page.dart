@@ -33,6 +33,8 @@ final Set<String> _hospitalFacilityFilters = {};
 final _searchCtrl = TextEditingController();
 String _query = '';
 String? _area;
+// 「緊急の迷子をすべて見る」から開いたときは、迷子タブを「緊急」で開く
+String? _lostStart;
 
 @override
 void dispose() {
@@ -106,7 +108,7 @@ _MapFilter get _filter => _MapFilter(_query, _area);
 Widget _categoryChip(String value, String label) {
 final sel = _category == value;
 return GestureDetector(
-onTap: () => setState(() => _category = value),
+onTap: () => setState(() { _category = value; _lostStart = null; }),
 child: Container(
 margin: const EdgeInsets.only(right: 8),
 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -251,7 +253,7 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
           _OrgList(filter: _filter),
         ],
         if (_category == 'adoption') _AdoptionList(filter: _filter),
-        if (_category == 'lost') _LostList(filter: _filter),
+        if (_category == 'lost') _LostList(key: ValueKey(_lostStart), filter: _filter, initialStatus: _lostStart),
         if (_category == 'volunteer') _VolunteerList(filter: _filter),
         if (_category == 'hospital')
           _HospitalList(
@@ -386,10 +388,13 @@ class _TimelineList extends StatelessWidget {
                         }).toList();
                         final topItems = capped.take(30).toList();
 
-                        final urgentItems = topItems
+                        // 緊急の迷子：まだ見つかっていないものを新しい順に。上に大きく出すのは3つまで。
+                        // 4つ以上あるときは「すべて見る」から、迷子タブの「緊急」で全部見られる
+                        final urgentAll = items
                             .where((i) => i.type == 'lost' && i.data['urgent'] == true)
-                            .take(3)
                             .toList();
+                        final urgentItems = urgentAll.take(3).toList();
+                        final urgentMore = urgentAll.length - urgentItems.length;
                         final gridItems = topItems.where((i) => !urgentItems.contains(i)).toList();
 
                         return ListView(
@@ -420,6 +425,24 @@ class _TimelineList extends StatelessWidget {
                                       .toList(),
                                 ),
                               ),
+                              if (urgentMore > 0)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => setState(() {
+                                      _lostStart = 'urgent';
+                                      _category = 'lost';
+                                    }),
+                                    icon: const Icon(Icons.campaign_rounded, color: Colors.red),
+                                    label: Text('緊急の迷子をすべて見る（ほかに$urgentMore件）',
+                                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w700)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.red[200]!),
+                                      minimumSize: const Size.fromHeight(44),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    ),
+                                  ),
+                                ),
                             ],
                             if (gridItems.isNotEmpty) ...[
                               const Padding(
@@ -1445,14 +1468,15 @@ final doc = entry.value;
 
 class _LostList extends StatefulWidget {
   final _MapFilter filter;
-  const _LostList({required this.filter});
+  final String? initialStatus;
+  const _LostList({super.key, required this.filter, this.initialStatus});
 
   @override
   State<_LostList> createState() => _LostListState();
 }
 
 class _LostListState extends State<_LostList> {
-  String _filter = 'all';
+  late String _filter = widget.initialStatus ?? 'all';
 
   @override
   Widget build(BuildContext context) {
