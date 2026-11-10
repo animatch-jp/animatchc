@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import '../widgets/motion.dart';
 import '../widgets/animaru_loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -137,6 +138,8 @@ class _NotificationPageState extends State<NotificationPage> {
           _notifs = snapshot.docs
               .take(50)
               .map((d) => {'id': d.id, ...d.data()})
+              // ブロックした人からの通知は出さない
+              .where((n) => !BlockedUsers.instance.isBlocked(n['senderUid'] ?? n['fromUid']))
               .toList();
           _isLoading = false;
         });

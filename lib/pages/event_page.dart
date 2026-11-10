@@ -2,6 +2,7 @@ import '../services/cloudinary_service.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import '../services/event_cleanup.dart';
 import '../services/age_utils.dart';
 import '../widgets/motion.dart';
@@ -451,6 +452,8 @@ class _EventPageState extends State<EventPage> {
           .where((event) {
         // 自分が企画したイベントは、終了していても表示する（終了日を延ばせるように）
         if (myUid != null && event['organizerUid'] == myUid) return true;
+        // ブロックした人が企画したイベントは出さない
+        if (BlockedUsers.instance.isBlocked(event['organizerUid'])) return false;
         final endDate = event['endDate'];
         if (endDate == null) return true;
         return (endDate as Timestamp).toDate().isAfter(now);

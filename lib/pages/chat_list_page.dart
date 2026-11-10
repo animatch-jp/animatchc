@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/unread_service.dart';
@@ -81,6 +82,8 @@ class _ChatListPageState extends State<ChatListPage>
         final otherUid =
         participants.firstWhere((u) => u != myUid, orElse: () => '');
         if (otherUid.isEmpty) continue;
+        // ブロックした相手とのチャットは出さない
+        if (BlockedUsers.instance.isBlocked(otherUid)) continue;
 
         if (!_orgCache.containsKey(otherUid)) {
           final orgDoc = await FirebaseFirestore.instance

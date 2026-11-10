@@ -2,6 +2,7 @@ import 'profile_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import 'pet_brag_page.dart';
 import 'ranking_page.dart';
 import 'question_board_page.dart';
@@ -233,7 +234,9 @@ class _QuestionBoardPreview extends StatelessWidget {
                   );
                 }
                 return Column(
-                  children: snapshot.data!.docs.map((doc) {
+                  children: snapshot.data!.docs
+                      .where((d) => !BlockedUsers.instance.isBlocked((d.data() as Map<String, dynamic>)['uid']))
+                      .map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 6),

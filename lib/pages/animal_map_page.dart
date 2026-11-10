@@ -1,5 +1,6 @@
 import 'org_posts.dart';
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import '../widgets/verified_org_mark.dart';
 import '../widgets/motion.dart';
 import '../widgets/animaru_loading.dart';
@@ -349,18 +350,22 @@ class _TimelineList extends StatelessWidget {
                         }
 
                         final items = <_TimelineItem>[];
+                        // ブロックした人・団体の投稿は出さない
                         for (final d in docsOf(lostSnap)) {
                           final data = d.data() as Map<String, dynamic>;
+                          if (BlockedUsers.instance.isBlocked(data['uid'])) continue;
                           items.add(_TimelineItem('lost', '🔍', const Color(0xFF3498DB),
                               data['petName'] ?? '', data['createdAt'], d.id, data));
                         }
                         for (final d in docsOf(volSnap)) {
                           final data = d.data() as Map<String, dynamic>;
+                          if (BlockedUsers.instance.isBlocked(data['orgId'])) continue;
                           items.add(_TimelineItem('volunteer', '🤝', const Color(0xFFE8845A),
                               data['title'] ?? '', data['createdAt'], d.id, data));
                         }
                         for (final d in docsOf(orgSnap)) {
                           final data = d.data() as Map<String, dynamic>;
+                          if (BlockedUsers.instance.isBlocked(d.id)) continue;
                           items.add(_TimelineItem('org', '🏠', const Color(0xFF2D6A4F),
                               '${data['name'] ?? ''}', data['createdAt'], d.id, data));
                         }
@@ -371,6 +376,7 @@ class _TimelineList extends StatelessWidget {
                         }
                         for (final d in docsOf(adoptSnap)) {
                           final data = d.data() as Map<String, dynamic>;
+                          if (BlockedUsers.instance.isBlocked(data['orgId'])) continue;
                           items.add(_TimelineItem('adoption', '🐾', Colors.orange,
                               data['petName'] ?? '', data['createdAt'], d.id, data));
                         }
@@ -1022,6 +1028,7 @@ child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
 final docs = snapshot.data!.docs.where((doc) {
 final data = doc.data() as Map<String, dynamic>;
 if (data['isPaused'] == true) return false;
+if (BlockedUsers.instance.isBlocked(data['orgId'])) return false;
 if (areaFilter != null && data['area'] != areaFilter) return false;
 if (animalFilter != null) {
 final tags = List<String>.from(data['animalTags'] ?? []);
@@ -1368,6 +1375,7 @@ class _OrgList extends StatelessWidget {
           );
         }
         final docs = snapshot.data!.docs
+            .where((d) => !BlockedUsers.instance.isBlocked(d.id))
             .where((d) => filter.matches(d.data() as Map<String, dynamic>,
                 ['name', 'area', 'activityDescription']))
             .toList();
@@ -1433,6 +1441,7 @@ class _AdoptionList extends StatelessWidget {
         final areas = areaSnap.data ?? const <String, String>{};
         final docs = all.where((d) {
           final data = d.data() as Map<String, dynamic>;
+          if (BlockedUsers.instance.isBlocked(data['orgId'])) return false;
           return filter.matches(data, ['petName', 'type', 'personality', 'orgName'],
               areaValue: areas[data['orgId']] ?? '');
         }).toList();
@@ -1513,7 +1522,9 @@ class _LostListState extends State<_LostList> {
               );
             }
             final myUid = FirebaseAuth.instance.currentUser?.uid;
-            var docs = snapshot.data!.docs;
+            var docs = snapshot.data!.docs
+                .where((d) => !BlockedUsers.instance.isBlocked((d.data() as Map<String, dynamic>)['uid']))
+                .toList();
             if (_filter == 'urgent') {
               docs = docs.where((d) => (d.data() as Map<String, dynamic>)['urgent'] == true).toList();
             } else if (_filter == 'mine') {

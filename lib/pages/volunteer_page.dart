@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import '../widgets/motion.dart';
 import '../widgets/verified_org_mark.dart';
 import '../widgets/animaru_loading.dart';
@@ -33,7 +34,9 @@ class VolunteerPage extends StatelessWidget {
           if (!snapshot.hasData) {
             return const AnimaruLoading();
           }
-          final docs = snapshot.data!.docs;
+          final docs = snapshot.data!.docs
+              .where((d) => !BlockedUsers.instance.isBlocked((d.data() as Map<String, dynamic>)['orgId']))
+              .toList();
           if (docs.isEmpty) {
             return const Center(
               child: Padding(

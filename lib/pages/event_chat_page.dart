@@ -372,21 +372,25 @@ class _EventChatPageState extends State<EventChatPage> {
     // グループチャットのメッセージは「コメント・メッセージ」の設定に従う。
     for (final uid in notifyUids) {
       if (!await shouldSendNotification(uid, 'コメント・メッセージ')) continue;
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(uid)
-          .collection('items')
-          .doc('groupChat_${widget.eventId}')
-          .set({
-        'type': 'groupChat',
-        'emoji': '👥',
-        'title': 'グループチャットにメッセージが届きました！',
-        'desc': '${_myName ?? ''} さんがメッセージを送りました',
-        'fromUid': myUid,
-        'eventId': widget.eventId,
-        'read': false,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // 自分をブロックしている人には、ルールで止められて届かない。
+      // そのときも、ほかの人への通知は続けて送る
+      try {
+        await FirebaseFirestore.instance
+            .collection('notifications')
+            .doc(uid)
+            .collection('items')
+            .doc('groupChat_${widget.eventId}')
+            .set({
+          'type': 'groupChat',
+          'emoji': '👥',
+          'title': 'グループチャットにメッセージが届きました！',
+          'desc': '${_myName ?? ''} さんがメッセージを送りました',
+          'fromUid': myUid,
+          'eventId': widget.eventId,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
     }
 
     // 送ったら、一番下（逆向きのリストでは、位置0）に戻る

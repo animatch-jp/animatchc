@@ -14,6 +14,12 @@ service cloud.firestore {
     // ── v8（2026-11-01）：運営（admins）ができることを足し、イベントのチャットを安全にした ──
 
     // 運営（admins に入っている人）かどうか
+    // ブロックされていないか：owner が自分（request.auth.uid）をブロックしていたら false。
+    // ブロックした人には、通知・コメント・回答・参加・投票・「興味あります」など、何も届かないようにする
+    function notBlockedBy(owner) {
+      return !(owner is string) || owner == ''
+        || !exists(/databases/$(database)/documents/blocks/$(owner)/blocked/$(request.auth.uid));
+    }
     // 自分のプロフィールの名前（なりすまし防止。名前を書く場所は、これと同じ名前だけにする）
     function myProfileName(dflt) {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('name', dflt);
@@ -344,7 +350,8 @@ service cloud.firestore {
       // 審査の結果・運営の対応などの通知は、運営だけが送れる（運営になりすませない）。文字数の上限つき
       allow create: if request.auth != null && (
         isAdmin() || (
-          request.resource.data.get('senderUid', request.resource.data.get('fromUid', '')) == request.auth.uid
+          notBlockedBy(userId)
+          && request.resource.data.get('senderUid', request.resource.data.get('fromUid', '')) == request.auth.uid
           && !(request.resource.data.get('type', '') in ['orgApproved', 'orgRejected', 'orgUpdateReflected',
                'hospitalApproved', 'hospitalRejected', 'hospitalUpdateReflected', 'reportHandled', 'admin', 'announcement'])
           && strMax(request.resource.data, 'title', 100) && strMax(request.resource.data, 'desc', 300)
@@ -355,6 +362,7 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         request.auth.uid == userId ||
         (itemId.matches('groupChat_.*')
+          && notBlockedBy(userId)
           && request.resource.data.get('fromUid', '') == request.auth.uid
           && request.resource.data.get('senderUid', request.auth.uid) == request.auth.uid
           && request.resource.data.get('type', '') == 'groupChat'
@@ -409,6 +417,7 @@ service cloud.firestore {
         allow create: if request.auth != null
           && request.auth.uid == uid
           && !(request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('bannedUsers', []))
+          && notBlockedBy(get(/databases/$(database)/documents/events/$(eventId)).data.get('organizerUid', ''))
           && isAdultUser(request.auth.uid);
         allow delete: if request.auth != null && (
           request.auth.uid == uid || isAdmin() ||
@@ -500,12 +509,14 @@ service cloud.firestore {
         allow read: if request.auth != null;
         // 1人1回だけ。あとから消したり書きかえたりはできない（消して入れ直すズルを防ぐ）
         allow create: if request.auth != null && request.auth.uid == voterId
+          && notBlockedBy(get(/databases/$(database)/documents/petBrags/$(postId)).data.get('uid', ''))
           && request.resource.data.voteType in ['kawaii', 'omoshiroi', 'iyashi'];
       }
 
       match /comments/{commentId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
+          && notBlockedBy(get(/databases/$(database)/documents/petBrags/$(postId)).data.get('uid', ''))
           && request.resource.data.text is string && request.resource.data.text.size() <= 200
           && strMax(request.resource.data, 'name', 30)
           && request.resource.data.get('name', '') == myProfileName('名無しさん');
@@ -621,6 +632,7 @@ service cloud.firestore {
         );
         // 押すのは自分の分だけ。名前は自分のプロフィールの名前だけ（ほかの人になりすませない）
         allow create, update: if request.auth != null && request.auth.uid == uid
+          && notBlockedBy(get(/databases/$(database)/documents/volunteers/$(volunteerId)).data.get('orgId', ''))
           && request.resource.data.keys().hasOnly(['uid', 'name', 'createdAt'])
           && request.resource.data.uid == uid
           && request.resource.data.name ==
@@ -703,6 +715,7 @@ service cloud.firestore {
         allow read: if request.auth != null;
         // 回答を作るとき、「役に立った」は空で始める（最初から票を入れておけない）
         allow create: if request.auth != null && request.auth.uid == request.resource.data.uid
+          && notBlockedBy(get(/databases/$(database)/documents/questions/$(questionId)).data.get('uid', ''))
           && request.resource.data.get('helpfulBy', []).size() == 0
           && request.resource.data.text is string && request.resource.data.text.size() <= 500
           && strMax(request.resource.data, 'name', 30)

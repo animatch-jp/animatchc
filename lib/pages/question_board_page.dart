@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import '../widgets/motion.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
@@ -159,6 +160,8 @@ class _QuestionList extends StatelessWidget {
         }
         var docs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
+          // ブロックした人の質問は出さない
+          if (BlockedUsers.instance.isBlocked(data['uid'])) return false;
           if (categories.isNotEmpty && !categories.contains(data['category'])) return false;
           if (onlyUnsolved && data['solved'] == true) return false;
           return true;
@@ -577,7 +580,10 @@ class _AnswerList extends StatelessWidget {
             child: Center(child: CircularProgressIndicator(color: Color(0xFFE8845A))),
           );
         }
-        final docs = snapshot.data!.docs;
+        // ブロックした人の回答は出さない
+        final docs = snapshot.data!.docs
+            .where((d) => !BlockedUsers.instance.isBlocked((d.data() as Map<String, dynamic>)['uid']))
+            .toList();
         if (docs.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),

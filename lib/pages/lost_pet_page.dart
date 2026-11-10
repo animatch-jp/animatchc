@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/blocked_users.dart';
 import '../widgets/motion.dart';
 import '../services/content_filter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -378,7 +379,10 @@ class _LostPetPageState extends State<LostPetPage> {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFF3498DB)));
                 }
                 final myUid = FirebaseAuth.instance.currentUser?.uid;
-                var docs = snapshot.data!.docs;
+                // ブロックした人の迷子情報は出さない
+                var docs = snapshot.data!.docs
+                    .where((d) => !BlockedUsers.instance.isBlocked((d.data() as Map<String, dynamic>)['uid']))
+                    .toList();
                 if (_filter == 'urgent') {
                   docs = docs.where((d) => (d.data() as Map<String, dynamic>)['urgent'] == true).toList();
                 } else if (_filter == 'mine') {
