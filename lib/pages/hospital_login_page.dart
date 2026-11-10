@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/login_help.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'hospital_signup_page.dart';
@@ -87,6 +89,8 @@ password: _passCtrl.text.trim(),
 );
 
 final uid = userCredential.user?.uid;
+// ログインできたら、スマホに「パスワードを保存しますか」と聞いてもらう
+TextInput.finishAutofillContext();
 final hospitalDoc = await FirebaseFirestore.instance.collection('hospitals').doc(uid).get();
 
 if (!hospitalDoc.exists) {
@@ -135,7 +139,7 @@ Widget build(BuildContext context) {
     ),
     body: SingleChildScrollView(
       padding: const EdgeInsets.all(24),
-      child: Column(
+      child: AutofillGroup(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('🏥', style: TextStyle(fontSize: 48)),
@@ -146,6 +150,7 @@ Widget build(BuildContext context) {
           const SizedBox(height: 32),
           TextField(
             controller: _emailCtrl,
+            autofillHints: const [AutofillHints.email, AutofillHints.username],
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               labelText: 'メールアドレス',
@@ -158,6 +163,7 @@ Widget build(BuildContext context) {
           const SizedBox(height: 16),
           TextField(
             controller: _passCtrl,
+            autofillHints: const [AutofillHints.password],
             obscureText: _obscurePassword,
             decoration: InputDecoration(
               labelText: 'パスワード',
@@ -174,10 +180,16 @@ Widget build(BuildContext context) {
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _showPasswordReset,
-              child: const Text('パスワードを忘れた方', style: TextStyle(color: Color(0xFF7FC4E8))),
-            ),
+            child: Wrap(alignment: WrapAlignment.end, children: [
+              TextButton(
+                onPressed: () => showEmailHelp(context),
+                child: const Text('メールアドレスを忘れた方', style: TextStyle(color: Color(0xFF7FC4E8))),
+              ),
+              TextButton(
+                onPressed: _showPasswordReset,
+                child: const Text('パスワードを忘れた方', style: TextStyle(color: Color(0xFF7FC4E8))),
+              ),
+            ]),
           ),
           const SizedBox(height: 16),
           SizedBox(
@@ -210,7 +222,7 @@ Widget build(BuildContext context) {
             ),
           ),
         ],
-      ),
+      )),
     ),
   );
 }

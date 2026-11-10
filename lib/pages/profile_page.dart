@@ -9,6 +9,7 @@ import 'delete_account_page.dart';
 import 'notification_settings_page.dart';
 import 'abuse_report_page.dart';
 import 'package:flutter/material.dart';
+import '../widgets/login_help.dart';
 import '../widgets/motion.dart';
 import 'notification_page.dart';
 import 'privacy_page.dart';
@@ -959,11 +960,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           builder: (_) => AlertDialog(
                             title: const Text('ログアウト'),
                             // もう一度入るときに困らないように、ログインに使うメールアドレスを見せる
-                            content: Text(
-                                'ログアウトしますか？\n\n'
-                                'もう一度ログインするときは、このメールアドレスとパスワードを使います。\n'
-                                '${FirebaseAuth.instance.currentUser?.email ?? ''}\n\n'
-                                'パスワードを忘れたときは、ログイン画面の「パスワードを忘れた方」から作り直せます。'),
+                            content: logoutNoteText(),
                             actions: [
                               TextButton(
                                 onPressed: () =>

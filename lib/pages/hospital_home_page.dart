@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/login_help.dart';
 import '../services/private_account.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -140,7 +141,7 @@ class _HospitalHomePageState extends State<HospitalHomePage> {
                 context: context,
                 builder: (_) => AlertDialog(
                   title: const Text('ログアウトしますか？'),
-                  content: const Text('もう一度ログインが必要になります'),
+                  content: logoutNoteText(),
                   actions: [
                     TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('キャンセル')),
                     ElevatedButton(

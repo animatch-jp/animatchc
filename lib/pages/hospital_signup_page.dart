@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/private_account.dart';
 import '../widgets/animaru_guide.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -101,6 +102,8 @@ Future<void> _submit() async {
       email: _emailCtrl.text.trim(),
       password: _passCtrl.text.trim(),
     );
+    // 登録できたら、スマホに「パスワードを保存しますか」と聞いてもらう
+    TextInput.finishAutofillContext();
 
     final uid = userCredential.user?.uid;
 
@@ -189,7 +192,7 @@ Widget build(BuildContext context) {
     ),
     body: SingleChildScrollView(
       padding: const EdgeInsets.all(24),
-      child: Column(
+      child: AutofillGroup(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 Container(
@@ -351,6 +354,7 @@ Container(
           const SizedBox(height: 12),
           TextField(
             controller: _emailCtrl,
+            autofillHints: const [AutofillHints.email, AutofillHints.username],
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               labelText: 'メールアドレス *',
@@ -362,6 +366,7 @@ Container(
           const SizedBox(height: 16),
           TextField(
             controller: _passCtrl,
+            autofillHints: const [AutofillHints.newPassword],
             obscureText: _obscurePassword,
             decoration: InputDecoration(
               labelText: 'パスワード（6文字以上） *',
@@ -391,7 +396,7 @@ Container(
             ),
           ),
         ],
-      ),
+      )),
     ),
   );
 }

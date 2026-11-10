@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/login_help.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'organization_signup_page.dart';
@@ -113,6 +115,8 @@ class _OrganizationLoginPageState extends State<OrganizationLoginPage> {
       );
 
       final uid = userCredential.user?.uid;
+      // ログインできたら、スマホに「パスワードを保存しますか」と聞いてもらう
+      TextInput.finishAutofillContext();
       final orgDoc = await FirebaseFirestore.instance
           .collection('organizations')
           .doc(uid)
@@ -191,7 +195,7 @@ class _OrganizationLoginPageState extends State<OrganizationLoginPage> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: AutofillGroup(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('🏢', style: TextStyle(fontSize: 48)),
@@ -204,6 +208,7 @@ class _OrganizationLoginPageState extends State<OrganizationLoginPage> {
             const SizedBox(height: 32),
             TextField(
               controller: _emailCtrl,
+              autofillHints: const [AutofillHints.email, AutofillHints.username],
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
                 labelText: 'メールアドレス',
@@ -217,6 +222,7 @@ class _OrganizationLoginPageState extends State<OrganizationLoginPage> {
             const SizedBox(height: 16),
             TextField(
               controller: _passCtrl,
+              autofillHints: const [AutofillHints.password],
               obscureText: _obscurePassword,
               decoration: InputDecoration(
                 labelText: 'パスワード',
@@ -237,11 +243,18 @@ class _OrganizationLoginPageState extends State<OrganizationLoginPage> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _showPasswordReset,
-                child: const Text('パスワードを忘れた方',
-                    style: TextStyle(color: Color(0xFFE8A598))),
-              ),
+              child: Wrap(alignment: WrapAlignment.end, children: [
+                TextButton(
+                  onPressed: () => showEmailHelp(context),
+                  child: const Text('メールアドレスを忘れた方',
+                      style: TextStyle(color: Color(0xFFE8A598))),
+                ),
+                TextButton(
+                  onPressed: _showPasswordReset,
+                  child: const Text('パスワードを忘れた方',
+                      style: TextStyle(color: Color(0xFFE8A598))),
+                ),
+              ]),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -283,7 +296,7 @@ class _OrganizationLoginPageState extends State<OrganizationLoginPage> {
               ),
             ),
           ],
-        ),
+        )),
       ),
     );
   }

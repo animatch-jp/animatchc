@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/login_help.dart';
 import 'package:flutter/services.dart';
 import '../services/private_account.dart';
 import '../widgets/animaru.dart';
@@ -57,23 +58,6 @@ _emailCtrl.dispose();
 _passCtrl.dispose();
 _passFocus.dispose();
 super.dispose();
-}
-
-// メールアドレスを忘れた人への案内（アカウントを探す機能はないので、手がかりと問い合わせ先を出す）
-void _showEmailHelp() {
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text('メールアドレスを忘れたとき'),
-      content: const Text(
-          '・スマホにパスワードを保存していれば、メールアドレスの欄を押すと候補が出ます。\n'
-          '・よく使うメールアドレスを、1つずつ「パスワードを忘れた方」に入れてみてください。登録したアドレスなら、作り直しのメールが届きます。\n\n'
-          'それでもわからないときは、animatch.jp@gmail.com へ、アプリで使っていた名前とペットの名前を書いて送ってください。'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('とじる')),
-      ],
-    ),
-  );
 }
 
 void _showPasswordReset() {
@@ -381,7 +365,7 @@ Widget build(BuildContext context) {
                     alignment: WrapAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: () => _showEmailHelp(),
+                        onPressed: () => showEmailHelp(context),
                         child: const Text('メールアドレスを忘れた方',
                             style: TextStyle(color: Color(0xFFE8A598))),
                       ),
