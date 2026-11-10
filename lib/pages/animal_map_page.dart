@@ -179,6 +179,10 @@ elevation: 0,
 ),
 body: _category == 'all'
 ? _TimelineList(
+    onShowUrgentLost: () => setState(() {
+      _lostStart = 'urgent';
+      _category = 'lost';
+    }),
     header: _chips(),
     footer: const Column(children: [
       Padding(
@@ -283,7 +287,9 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
 class _TimelineList extends StatelessWidget {
   final Widget header;
   final Widget footer;
-  const _TimelineList({required this.header, required this.footer});
+  // 「緊急の迷子をすべて見る」を押したとき（迷子タブを「緊急」で開く）
+  final VoidCallback onShowUrgentLost;
+  const _TimelineList({required this.header, required this.footer, required this.onShowUrgentLost});
 
   @override
   Widget build(BuildContext context) {
@@ -435,10 +441,7 @@ class _TimelineList extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                                   child: OutlinedButton.icon(
-                                    onPressed: () => setState(() {
-                                      _lostStart = 'urgent';
-                                      _category = 'lost';
-                                    }),
+                                    onPressed: onShowUrgentLost,
                                     icon: const Icon(Icons.campaign_rounded, color: Colors.red),
                                     label: Text('緊急の迷子をすべて見る（ほかに$urgentMore件）',
                                         style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w700)),
