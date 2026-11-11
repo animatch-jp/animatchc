@@ -36,11 +36,30 @@ String _query = '';
 String? _area;
 // 「緊急の迷子をすべて見る」から開いたときは、迷子タブを「緊急」で開く
 String? _lostStart;
+// 下までスクロールしたあと、すぐ上にもどれるようにする（社長 11/11「上にスクロールしづらい」）
+final _scroll = ScrollController();
+bool _showToTop = false;
+
+@override
+void initState() {
+  super.initState();
+  _scroll.addListener(() {
+    final show = _scroll.hasClients && _scroll.offset > 600;
+    if (show != _showToTop) setState(() => _showToTop = show);
+  });
+}
 
 @override
 void dispose() {
   _searchCtrl.dispose();
+  _scroll.dispose();
   super.dispose();
+}
+
+void _toTop() {
+  if (_scroll.hasClients) {
+    _scroll.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+  }
 }
 
 Widget _filterBar() {
@@ -109,7 +128,7 @@ _MapFilter get _filter => _MapFilter(_query, _area);
 Widget _categoryChip(String value, String label) {
 final sel = _category == value;
 return GestureDetector(
-onTap: () => setState(() { _category = value; _lostStart = null; }),
+onTap: () => setState(() { _category = value; _lostStart = null; _showToTop = false; }),
 child: Container(
 margin: const EdgeInsets.only(right: 8),
 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -150,11 +169,12 @@ color: selected
 );
 }
 
+// 種類のボタンは、画面の上に残しておく（スクロールしても消えない）。1列で横にスライドできる
 Widget _chips() {
-  return Padding(
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-    child: Wrap(
-      runSpacing: 8,
+    child: Row(
       children: [
         _categoryChip('all', 'すべて'),
         _categoryChip('org', '🏠 団体'),
@@ -199,19 +219,24 @@ actions: [
 ],
 ),
 body: _category == 'all'
-? _TimelineList(
+? Column(children: [
+  _chips(),
+  Expanded(child: _TimelineList(
+    controller: _scroll,
     onShowUrgentLost: () => setState(() {
       _lostStart = 'urgent';
       _category = 'lost';
     }),
-    header: _chips(),
+    header: const SizedBox(height: 4),
     footer: const Column(children: [
       Padding(
         padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
         child: LatestOrgPosts(key: ValueKey('latestOrgPosts')),
       ),
       _ImpactCard(),
-    ]))
+    ])),
+  ),
+])
 : Column(
 children: [
 const Padding(
@@ -272,6 +297,7 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
 ),
   Expanded(
     child: ListView(
+      controller: _scroll,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
         if (_category == 'org') ...[
@@ -293,14 +319,31 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
   ),
 ],
 ),
-  floatingActionButton: _category == 'lost'
-      ? FloatingActionButton.extended(
-    onPressed: () => showLostPetPostSheet(context),
-    backgroundColor: const Color(0xFF3498DB),
-    icon: const Icon(Icons.add, color: Colors.white),
-    label: const Text('投稿する', style: TextStyle(color: Colors.white)),
-  )
-      : null,
+  floatingActionButton: Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      if (_showToTop)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: FloatingActionButton.small(
+            heroTag: 'mapToTop',
+            onPressed: _toTop,
+            backgroundColor: Colors.white,
+            tooltip: 'いちばん上へ',
+            child: const Icon(Icons.arrow_upward_rounded, color: Color(0xFF2D6A4F)),
+          ),
+        ),
+      if (_category == 'lost')
+        FloatingActionButton.extended(
+          heroTag: 'mapLostPost',
+          onPressed: () => showLostPetPostSheet(context),
+          backgroundColor: const Color(0xFF3498DB),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('投稿する', style: TextStyle(color: Colors.white)),
+        ),
+    ],
+  ),
 
 );
 }
@@ -310,7 +353,8 @@ class _TimelineList extends StatelessWidget {
   final Widget footer;
   // 「緊急の迷子をすべて見る」を押したとき（迷子タブを「緊急」で開く）
   final VoidCallback onShowUrgentLost;
-  const _TimelineList({required this.header, required this.footer, required this.onShowUrgentLost});
+  final ScrollController controller;
+  const _TimelineList({required this.header, required this.footer, required this.onShowUrgentLost, required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -427,6 +471,7 @@ class _TimelineList extends StatelessWidget {
                         final gridItems = topItems.where((i) => !urgentItems.contains(i)).toList();
 
                         return ListView(
+                          controller: controller,
                           padding: const EdgeInsets.only(bottom: 16),
                           children: [
                             header,
