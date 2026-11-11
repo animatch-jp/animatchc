@@ -561,9 +561,15 @@ class _TextRow extends StatelessWidget {
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3D2B1F))),
                 ),
               ]),
-              if (subtitle.isNotEmpty)
-                Text(subtitle,
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              // 何の情報か（里親・ボランティアなど）を、絵文字だけでなく文字でも見せる
+              Text(
+                  [
+                    _timelineLabel(item, short: true).replaceFirst(RegExp(r'^\S+ '), ''),
+                    if (subtitle.isNotEmpty) subtitle,
+                  ].join('・'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             ]),
           ),
           if (meta.isNotEmpty)
