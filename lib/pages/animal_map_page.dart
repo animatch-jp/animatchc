@@ -585,12 +585,14 @@ class _TextRow extends StatelessWidget {
 }
 
 // 写真のカードのならべ方：どの画面の幅でも、1枚の幅は250まで。高さは「写真（正方形）＋文字2〜3行」にして、空白が出ないようにする
+// 緊急はいつも横2つ×縦2段（社長 11/11）。広い画面でも大きくなりすぎないように、2つぶんの幅までにして左に寄せる
 Widget _tileGrid(List<_TimelineItem> list, {bool urgent = false}) {
   return LayoutBuilder(builder: (context, c) {
     const gap = 12.0;
-    final cols = ((c.maxWidth + gap) / (250 + gap)).ceil().clamp(2, 6);
-    final w = (c.maxWidth - gap * (cols - 1)) / cols;
-    return GridView.builder(
+    final cols = urgent ? 2 : ((c.maxWidth + gap) / (250 + gap)).ceil().clamp(2, 6);
+    final maxW = urgent ? (c.maxWidth < 250 * 2 + gap ? c.maxWidth : 250 * 2 + gap) : c.maxWidth;
+    final w = (maxW - gap * (cols - 1)) / cols;
+    final grid = GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -606,6 +608,7 @@ Widget _tileGrid(List<_TimelineItem> list, {bool urgent = false}) {
         child: urgent ? Pulse(child: _TimelineTile(item: list[i], urgent: true)) : _TimelineTile(item: list[i]),
       ),
     );
+    return urgent ? Align(alignment: Alignment.centerLeft, child: SizedBox(width: maxW, child: grid)) : grid;
   });
 }
 
