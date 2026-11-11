@@ -400,12 +400,12 @@ class _TimelineList extends StatelessWidget {
                         }).toList();
                         final topItems = capped.take(30).toList();
 
-                        // 緊急の迷子：まだ見つかっていないものを新しい順に。上に大きく出すのは3つまで。
+                        // 緊急の迷子：まだ見つかっていないものを新しい順に。上に横2列で出すのは4つまで。
                         // 4つ以上あるときは「すべて見る」から、迷子タブの「緊急」で全部見られる
                         final urgentAll = items
                             .where((i) => i.type == 'lost' && i.data['urgent'] == true)
                             .toList();
-                        final urgentItems = urgentAll.take(3).toList();
+                        final urgentItems = urgentAll.take(4).toList();
                         final urgentMore = urgentAll.length - urgentItems.length;
                         final gridItems = topItems.where((i) => !urgentItems.contains(i)).toList();
 
@@ -426,15 +426,47 @@ class _TimelineList extends StatelessWidget {
                                 child: Text('🚨 緊急の迷子情報',
                                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.red)),
                               ),
+                              // 大きすぎないように、新着と同じ大きさで横2列（社長 11/11）。赤いふちと「緊急」で目立たせる
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Column(
-                                  children: urgentItems
-                                      .map((i) => FadeSlideIn(
-                                            key: ValueKey('u${i.type}${i.id}'),
-                                            child: Pulse(child: _TimelineCard(item: i)),
-                                          ))
-                                      .toList(),
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                child: GridView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    childAspectRatio: 0.66,
+                                  ),
+                                  itemCount: urgentItems.length,
+                                  itemBuilder: (_, i) => FadeSlideIn(
+                                    key: ValueKey('u${urgentItems[i].type}${urgentItems[i].id}'),
+                                    index: i,
+                                    child: Pulse(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(color: Colors.red[300]!, width: 2),
+                                        ),
+                                        child: Stack(children: [
+                                          Positioned.fill(child: _TimelineTile(item: urgentItems[i])),
+                                          Positioned(
+                                            top: 8,
+                                            right: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red,
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: const Text('緊急',
+                                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+                                            ),
+                                          ),
+                                        ]),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                               if (urgentMore > 0)
@@ -571,34 +603,6 @@ String _timelineSubtitle(_TimelineItem item) {
   }
 }
 
-// 大きいカード（緊急の迷子で使う）
-class _TimelineCard extends StatelessWidget {
-  final _TimelineItem item;
-  const _TimelineCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    final d = item.data;
-    return GestureDetector(
-      onTap: () => _openTimelineItem(context, item),
-      child: _PhotoCard(
-        imageUrl: _photoOf(d),
-        emoji: item.emoji,
-        color: item.color,
-        label: _timelineLabel(item),
-        title: item.title,
-        subtitle: _timelineSubtitle(item),
-        meta: _timeAgoOf(item.createdAt),
-        urgent: item.type == 'lost' && d['urgent'] == true,
-        verified: item.type == 'adoption' || item.type == 'volunteer' ||
-            (item.type == 'lost' && d['isOrganization'] == true) ||
-            (item.type == 'org' && d['status'] == 'approved'),
-      ),
-    );
-  }
-}
-
-// 2列で並べる小さいカード（新着）
 class _TimelineTile extends StatelessWidget {
   final _TimelineItem item;
   const _TimelineTile({required this.item});
