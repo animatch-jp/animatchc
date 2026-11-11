@@ -1,5 +1,6 @@
 import 'org_posts.dart';
 import 'package:flutter/material.dart';
+import '../services/tab_reselect.dart';
 import '../services/blocked_users.dart';
 import '../widgets/verified_org_mark.dart';
 import '../widgets/motion.dart';
@@ -36,30 +37,22 @@ String _query = '';
 String? _area;
 // 「緊急の迷子をすべて見る」から開いたときは、迷子タブを「緊急」で開く
 String? _lostStart;
-// 下までスクロールしたあと、すぐ上にもどれるようにする（社長 11/11「上にスクロールしづらい」）
+// 下の「どうぶつマップ」をもう一度押すと、いちばん上にもどる（社長 11/11。インスタと同じ）
 final _scroll = ScrollController();
-bool _showToTop = false;
+void _toTop() => TabReselect.toTop([_scroll]);
 
 @override
 void initState() {
   super.initState();
-  _scroll.addListener(() {
-    final show = _scroll.hasClients && _scroll.offset > 600;
-    if (show != _showToTop) setState(() => _showToTop = show);
-  });
+  TabReselect.tabs[1].addListener(_toTop);
 }
 
 @override
 void dispose() {
+  TabReselect.tabs[1].removeListener(_toTop);
   _searchCtrl.dispose();
   _scroll.dispose();
   super.dispose();
-}
-
-void _toTop() {
-  if (_scroll.hasClients) {
-    _scroll.animateTo(0, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
-  }
 }
 
 Widget _filterBar() {
@@ -125,27 +118,6 @@ Widget _filterBar() {
 
 _MapFilter get _filter => _MapFilter(_query, _area);
 
-Widget _categoryChip(String value, String label) {
-final sel = _category == value;
-return GestureDetector(
-onTap: () => setState(() { _category = value; _lostStart = null; _showToTop = false; }),
-child: Container(
-margin: const EdgeInsets.only(right: 8),
-padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-decoration: BoxDecoration(
-color: sel ? const Color(0xFF2D6A4F) : Colors.white,
-borderRadius: BorderRadius.circular(20),
-boxShadow: sel
-? []
-: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]),
-child: Text(label,
-style: TextStyle(
-fontSize: 13,
-color: sel ? Colors.white : Colors.grey[700],
-fontWeight: sel ? FontWeight.bold : FontWeight.normal)),
-),
-);
-}
 
 Widget _subChip(String label, bool selected, VoidCallback onTap, {bool facility = false}) {
 return GestureDetector(
@@ -169,20 +141,57 @@ color: selected
 );
 }
 
-// 種類のボタンは、画面の上に残しておく（スクロールしても消えない）。1列で横にスライドできる
+// 種類のボタンは、画面の上に残しておく（スクロールしても消えない）。
+// 6つ全部が、スライドしなくても1列に見えるように、絵文字の下に短い名前をならべる（社長 11/11）
 Widget _chips() {
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+  return Container(
+    margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    padding: const EdgeInsets.all(4),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
+    ),
     child: Row(
       children: [
-        _categoryChip('all', 'すべて'),
-        _categoryChip('org', '🏠 団体'),
-        _categoryChip('adoption', '🐾 里親'),
-        _categoryChip('lost', '🔍 迷子情報'),
-        _categoryChip('volunteer', '🤝 ボランティア'),
-        _categoryChip('hospital', '🏥 動物病院'),
+        _categoryTab('all', '✨', 'すべて'),
+        _categoryTab('org', '🏠', '団体'),
+        _categoryTab('adoption', '🐾', '里親'),
+        _categoryTab('lost', '🔍', '迷子'),
+        _categoryTab('volunteer', '🤝', 'ボランティア'),
+        _categoryTab('hospital', '🏥', '病院'),
       ],
+    ),
+  );
+}
+
+Widget _categoryTab(String value, String emoji, String label) {
+  final sel = _category == value;
+  return Expanded(
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() { _category = value; _lostStart = null; }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: sel ? const Color(0xFF2D6A4F) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label,
+                maxLines: 1,
+                style: TextStyle(
+                    fontSize: 11,
+                    color: sel ? Colors.white : Colors.grey[700],
+                    fontWeight: sel ? FontWeight.w800 : FontWeight.w500)),
+          ),
+        ]),
+      ),
     ),
   );
 }
@@ -323,17 +332,6 @@ _subChip('🌙 夜間対応', _hospitalFacilityFilters.contains('hasNightCare'),
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.end,
     children: [
-      if (_showToTop)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: FloatingActionButton.small(
-            heroTag: 'mapToTop',
-            onPressed: _toTop,
-            backgroundColor: Colors.white,
-            tooltip: 'いちばん上へ',
-            child: const Icon(Icons.arrow_upward_rounded, color: Color(0xFF2D6A4F)),
-          ),
-        ),
       if (_category == 'lost')
         FloatingActionButton.extended(
           heroTag: 'mapLostPost',

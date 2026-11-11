@@ -2,6 +2,7 @@ import '../services/cloudinary_service.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import 'package:flutter/material.dart';
+import '../services/tab_reselect.dart';
 import '../services/blocked_users.dart';
 import '../services/event_cleanup.dart';
 import '../services/age_utils.dart';
@@ -294,9 +295,21 @@ class _EventPageState extends State<EventPage> {
   int _activePostCount = 0; // 自分の公開中イベントの件数
   int? _myAge;
 
+  // 下の「イベント」をもう一度押すと、いちばん上にもどる
+  final _scroll = ScrollController();
+  void _toTop() => TabReselect.toTop([_scroll]);
+
+  @override
+  void dispose() {
+    TabReselect.tabs[2].removeListener(_toTop);
+    _scroll.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    TabReselect.tabs[2].addListener(_toTop);
     _loadEvents();
     _checkRulesAgreement();
     _loadMyPostCounts();
@@ -1219,6 +1232,7 @@ class _EventPageState extends State<EventPage> {
                 await _loadEvents();
               },
               child: ListView.builder(
+                controller: _scroll,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 itemCount: events.length,

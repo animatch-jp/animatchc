@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/tab_reselect.dart';
 import '../services/blocked_users.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,6 +18,10 @@ class ChatListPage extends StatefulWidget {
 class _ChatListPageState extends State<ChatListPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
+  // 下の「チャット」をもう一度押すと、いちばん上にもどる
+  final _orgScroll = ScrollController();
+  final _groupScroll = ScrollController();
+  void _toTop() => TabReselect.toTop([_orgScroll, _groupScroll]);
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatSub;
 
   List<Map<String, dynamic>> _orgChats = [];
@@ -34,6 +39,7 @@ class _ChatListPageState extends State<ChatListPage>
   @override
   void initState() {
     super.initState();
+    TabReselect.tabs[3].addListener(_toTop);
     _tabCtrl = TabController(length: 2, vsync: this);
     _listenOrgChats();
     // グループ（イベント）の一覧と未読は、共通部品が数えている
@@ -43,6 +49,9 @@ class _ChatListPageState extends State<ChatListPage>
 
   @override
   void dispose() {
+    TabReselect.tabs[3].removeListener(_toTop);
+    _orgScroll.dispose();
+    _groupScroll.dispose();
     _chatSub?.cancel();
     _tabCtrl.dispose();
     super.dispose();
@@ -389,6 +398,7 @@ class _ChatListPageState extends State<ChatListPage>
       );
     }
     return ListView.builder(
+      controller: _orgScroll,
       padding: const EdgeInsets.only(top: 12, bottom: 24),
       itemCount: _orgChats.length,
       itemBuilder: (_, i) => _orgCard(_orgChats[i]),
@@ -413,6 +423,7 @@ class _ChatListPageState extends State<ChatListPage>
       );
     }
     return ListView.builder(
+      controller: _groupScroll,
       itemCount: groups.length,
       itemBuilder: (_, i) {
         final g = groups[i];

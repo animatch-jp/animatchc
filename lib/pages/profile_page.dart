@@ -9,6 +9,7 @@ import 'delete_account_page.dart';
 import 'notification_settings_page.dart';
 import 'abuse_report_page.dart';
 import 'package:flutter/material.dart';
+import '../services/tab_reselect.dart';
 import '../widgets/login_help.dart';
 import '../widgets/motion.dart';
 import 'notification_page.dart';
@@ -86,10 +87,22 @@ class _ProfilePageState extends State<ProfilePage> {
   List<PetData> _pets = [];
 
 
+  // 下の「マイページ」をもう一度押すと、いちばん上にもどる
+  final _scroll = ScrollController();
+  void _toTop() => TabReselect.toTop([_scroll]);
+
   @override
   void initState() {
     super.initState();
+    TabReselect.tabs[4].addListener(_toTop);
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    TabReselect.tabs[4].removeListener(_toTop);
+    _scroll.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -388,6 +401,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scroll,
         child: Column(
           children: [
             Container(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/tab_reselect.dart';
 import '../services/private_account.dart';
 import 'home_page.dart';
 import 'chat_list_page.dart';
@@ -104,6 +105,11 @@ class _RootPageState extends State<RootPage> {
   ];
 
   void _selectTab(int index) {
+    // いま開いているタブをもう一度押したら、その画面のいちばん上にもどる
+    if (index == _idx) {
+      TabReselect.fire(index);
+      return;
+    }
     // チャットタブを開くときに、参加中のイベントを最新にする
     if (index == 3) UnreadService.instance.refreshMembership();
     setState(() {
