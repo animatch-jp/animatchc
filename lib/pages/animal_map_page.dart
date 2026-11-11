@@ -176,6 +176,27 @@ title: const Text('どうぶつマップ 🐾',
 style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
 backgroundColor: const Color(0xFFFFF8F5),
 elevation: 0,
+actions: [
+  // 写真で見る／文字だけで見る（社長 11/11）。アプリを開いているあいだは、選んだほうを覚えておく
+  Padding(
+    padding: const EdgeInsets.only(right: 12),
+    child: SegmentedButton<bool>(
+      showSelectedIcon: false,
+      style: SegmentedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        selectedBackgroundColor: const Color(0xFF2D6A4F),
+        selectedForegroundColor: Colors.white,
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+      segments: const [
+        ButtonSegment(value: false, icon: Icon(Icons.photo_library_outlined, size: 16), label: Text('写真')),
+        ButtonSegment(value: true, icon: Icon(Icons.view_list_rounded, size: 16), label: Text('文字')),
+      ],
+      selected: {_mapTextMode},
+      onSelectionChanged: (v) => setState(() => _mapTextMode = v.first),
+    ),
+  ),
+],
 ),
 body: _category == 'all'
 ? _TimelineList(
@@ -360,45 +381,40 @@ class _TimelineList extends StatelessWidget {
                         for (final d in docsOf(lostSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           if (BlockedUsers.instance.isBlocked(data['uid'])) continue;
-                          items.add(_TimelineItem('lost', '🔍', const Color(0xFF3498DB),
-                              data['petName'] ?? '', data['createdAt'], d.id, data));
+                          items.add(_itemOf('lost', d.id, data));
                         }
                         for (final d in docsOf(volSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           if (BlockedUsers.instance.isBlocked(data['orgId'])) continue;
-                          items.add(_TimelineItem('volunteer', '🤝', const Color(0xFFE8845A),
-                              data['title'] ?? '', data['createdAt'], d.id, data));
+                          items.add(_itemOf('volunteer', d.id, data));
                         }
                         for (final d in docsOf(orgSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           if (BlockedUsers.instance.isBlocked(d.id)) continue;
-                          items.add(_TimelineItem('org', '🏠', const Color(0xFF2D6A4F),
-                              '${data['name'] ?? ''}', data['createdAt'], d.id, data));
+                          items.add(_itemOf('org', d.id, data));
                         }
                         for (final d in docsOf(hospSnap)) {
                           final data = d.data() as Map<String, dynamic>;
-                          items.add(_TimelineItem('hospital', '🏥', const Color(0xFF4DA8DA),
-                              '${data['name'] ?? ''}', data['createdAt'], d.id, data));
+                          items.add(_itemOf('hospital', d.id, data));
                         }
                         for (final d in docsOf(adoptSnap)) {
                           final data = d.data() as Map<String, dynamic>;
                           if (BlockedUsers.instance.isBlocked(data['orgId'])) continue;
-                          items.add(_TimelineItem('adoption', '🐾', Colors.orange,
-                              data['petName'] ?? '', data['createdAt'], d.id, data));
+                          items.add(_itemOf('adoption', d.id, data));
                         }
 
                         // 保存直後（createdAtがまだ空）の投稿は、いちばん新しい扱いにする
                         int ms(dynamic t) => t is Timestamp ? t.millisecondsSinceEpoch : 9999999999999;
                         items.sort((a, b) => ms(b.createdAt).compareTo(ms(a.createdAt)));
 
-                        // 1つの種類で画面が埋まらないように、種類ごとに新しい8件までにする
+                        // 1つの種類で画面が埋まらないように、種類ごとに新しい12件までにする（社長 11/11「もう少し増やして」）
                         final counts = <String, int>{};
                         final capped = items.where((it) {
                           final c = (counts[it.type] ?? 0) + 1;
                           counts[it.type] = c;
-                          return c <= 8;
+                          return c <= 12;
                         }).toList();
-                        final topItems = capped.take(30).toList();
+                        final topItems = capped.take(60).toList();
 
                         // 緊急の迷子：まだ見つかっていないものを新しい順に。上に横2列で出すのは4つまで。
                         // 4つ以上あるときは「すべて見る」から、迷子タブの「緊急」で全部見られる
@@ -426,48 +442,12 @@ class _TimelineList extends StatelessWidget {
                                 child: Text('🚨 緊急の迷子情報',
                                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.red)),
                               ),
-                              // 大きすぎないように、新着と同じ大きさで横2列（社長 11/11）。赤いふちと「緊急」で目立たせる
+                              // 大きすぎないように、新着と同じ大きさ・同じならべ方にする（社長 11/11）。赤いふちと「緊急」で目立たせる
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                                child: GridView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    mainAxisSpacing: 12,
-                                    crossAxisSpacing: 12,
-                                    childAspectRatio: 0.66,
-                                  ),
-                                  itemCount: urgentItems.length,
-                                  itemBuilder: (_, i) => FadeSlideIn(
-                                    key: ValueKey('u${urgentItems[i].type}${urgentItems[i].id}'),
-                                    index: i,
-                                    child: Pulse(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(color: Colors.red[300]!, width: 2),
-                                        ),
-                                        child: Stack(children: [
-                                          Positioned.fill(child: _TimelineTile(item: urgentItems[i])),
-                                          Positioned(
-                                            top: 8,
-                                            right: 8,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: Colors.red,
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
-                                              child: const Text('緊急',
-                                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
-                                            ),
-                                          ),
-                                        ]),
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                child: _mapTextMode
+                                    ? Column(children: urgentItems.map((it) => _TextRow(item: it, urgent: true)).toList())
+                                    : _tileGrid(urgentItems, urgent: true),
                               ),
                               if (urgentMore > 0)
                                 Padding(
@@ -493,22 +473,9 @@ class _TimelineList extends StatelessWidget {
                               ),
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: GridView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                    maxCrossAxisExtent: 250,
-                                    mainAxisSpacing: 12,
-                                    crossAxisSpacing: 12,
-                                    childAspectRatio: 0.66,
-                                  ),
-                                  itemCount: gridItems.length,
-                                  itemBuilder: (_, i) => FadeSlideIn(
-                                    key: ValueKey('g${gridItems[i].type}${gridItems[i].id}'),
-                                    index: i,
-                                    child: _TimelineTile(item: gridItems[i]),
-                                  ),
-                                ),
+                                child: _mapTextMode
+                                    ? Column(children: gridItems.map((it) => _TextRow(item: it)).toList())
+                                    : _tileGrid(gridItems),
                               ),
                             ],
                             const SizedBox(height: 8),
@@ -526,6 +493,114 @@ class _TimelineList extends StatelessWidget {
       },
     );
   }
+}
+
+// 「文字」で見るかどうか（どうぶつマップ全体で共通。アプリを開いているあいだ覚えておく）
+bool _mapTextMode = false;
+
+// 種類ごとの見出し・色・絵文字をそろえる（「すべて」タブと、それぞれのタブの「文字」表示で使う）
+_TimelineItem _itemOf(String type, String id, Map<String, dynamic> data) {
+  switch (type) {
+    case 'lost':
+      return _TimelineItem('lost', '🔍', const Color(0xFF3498DB), data['petName'] ?? '', data['createdAt'], id, data);
+    case 'volunteer':
+      return _TimelineItem('volunteer', '🤝', const Color(0xFFE8845A), data['title'] ?? '', data['createdAt'], id, data);
+    case 'org':
+      return _TimelineItem('org', '🏠', const Color(0xFF2D6A4F), '${data['name'] ?? ''}', data['createdAt'], id, data);
+    case 'hospital':
+      return _TimelineItem('hospital', '🏥', const Color(0xFF4DA8DA), '${data['name'] ?? ''}', data['createdAt'], id, data);
+    default:
+      return _TimelineItem('adoption', '🐾', Colors.orange, data['petName'] ?? '', data['createdAt'], id, data);
+  }
+}
+
+// 文字だけの1行（写真を読みこまないので、たくさんの情報をすばやく見られる）
+class _TextRow extends StatelessWidget {
+  final _TimelineItem item;
+  final bool urgent;
+  const _TextRow({required this.item, this.urgent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = _timelineSubtitle(item);
+    final meta = _timeAgoOf(item.createdAt);
+    return Pressable(
+      onTap: () => _openTimelineItem(context, item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        decoration: BoxDecoration(
+          color: urgent ? const Color(0xFFFFF1F0) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: urgent ? Colors.red[300]! : Colors.black.withOpacity(0.06), width: urgent ? 1.5 : 1),
+        ),
+        child: Row(children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: item.color.withOpacity(0.12), shape: BoxShape.circle),
+            child: Text(item.emoji, style: const TextStyle(fontSize: 18)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                if (urgent) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(6)),
+                    child: const Text('緊急', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(item.title.isEmpty ? _timelineLabel(item) : item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3D2B1F))),
+                ),
+              ]),
+              if (subtitle.isNotEmpty)
+                Text(subtitle,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+            ]),
+          ),
+          if (meta.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Text(meta, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+            ),
+          Icon(Icons.chevron_right, color: Colors.grey[400]),
+        ]),
+      ),
+    );
+  }
+}
+
+// 写真のカードのならべ方：どの画面の幅でも、1枚の幅は250まで。高さは「写真（正方形）＋文字2〜3行」にして、空白が出ないようにする
+Widget _tileGrid(List<_TimelineItem> list, {bool urgent = false}) {
+  return LayoutBuilder(builder: (context, c) {
+    const gap = 12.0;
+    final cols = ((c.maxWidth + gap) / (250 + gap)).ceil().clamp(2, 6);
+    final w = (c.maxWidth - gap * (cols - 1)) / cols;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols,
+        mainAxisSpacing: gap,
+        crossAxisSpacing: gap,
+        mainAxisExtent: w + 64,
+      ),
+      itemCount: list.length,
+      itemBuilder: (_, i) => FadeSlideIn(
+        key: ValueKey('${urgent ? 'u' : 'g'}${list[i].type}${list[i].id}'),
+        index: i,
+        child: urgent ? Pulse(child: _TimelineTile(item: list[i], urgent: true)) : _TimelineTile(item: list[i]),
+      ),
+    );
+  });
 }
 
 class _TimelineItem {
@@ -605,7 +680,8 @@ String _timelineSubtitle(_TimelineItem item) {
 
 class _TimelineTile extends StatelessWidget {
   final _TimelineItem item;
-  const _TimelineTile({required this.item});
+  final bool urgent;
+  const _TimelineTile({required this.item, this.urgent = false});
 
   Widget _placeholder() {
     return Container(
@@ -632,6 +708,7 @@ class _TimelineTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
+          border: urgent ? Border.all(color: Colors.red[300]!, width: 2) : null,
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(
@@ -662,6 +739,17 @@ class _TimelineTile extends StatelessWidget {
                           style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
+                  if (urgent)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10)),
+                        child: const Text('緊急',
+                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900)),
+                      ),
+                    ),
                   if (meta.isNotEmpty)
                     Positioned(
                       right: 8,
@@ -1073,6 +1161,7 @@ return Column(
 children: docs.asMap().entries.map((entry) {
 final doc = entry.value;
 final data = doc.data() as Map<String, dynamic>;
+if (_mapTextMode) return _TextRow(item: _itemOf('hospital', doc.id, data));
 final animalTags = List<String>.from(data['animalTags'] ?? []);
 return FadeSlideIn(
   key: ValueKey(doc.id),
@@ -1391,6 +1480,7 @@ class _OrgList extends StatelessWidget {
           children: docs.asMap().entries.map((entry) {
 final doc = entry.value;
             final data = doc.data() as Map<String, dynamic>;
+            if (_mapTextMode) return _TextRow(item: _itemOf('org', doc.id, data), urgent: false);
             return FadeSlideIn(
   key: ValueKey(doc.id),
   index: entry.key,
@@ -1457,6 +1547,7 @@ class _AdoptionList extends StatelessWidget {
           children: docs.asMap().entries.map((entry) {
 final doc = entry.value;
             final data = doc.data() as Map<String, dynamic>;
+            if (_mapTextMode) return _TextRow(item: _itemOf('adoption', doc.id, data), urgent: false);
             return FadeSlideIn(
   key: ValueKey(doc.id),
   index: entry.key,
@@ -1549,6 +1640,7 @@ class _LostListState extends State<_LostList> {
               children: docs.asMap().entries.map((entry) {
 final doc = entry.value;
                 final data = doc.data() as Map<String, dynamic>;
+            if (_mapTextMode) return _TextRow(item: _itemOf('lost', doc.id, data), urgent: data['urgent'] == true);
                 final isMinePost = data['uid'] == myUid;
                 return FadeSlideIn(
   key: ValueKey(doc.id),
@@ -1674,6 +1766,7 @@ class _VolunteerList extends StatelessWidget {
           children: docs.asMap().entries.map((entry) {
 final doc = entry.value;
             final data = doc.data() as Map<String, dynamic>;
+            if (_mapTextMode) return _TextRow(item: _itemOf('volunteer', doc.id, data), urgent: false);
             return FadeSlideIn(
   key: ValueKey(doc.id),
   index: entry.key,
