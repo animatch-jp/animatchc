@@ -421,7 +421,8 @@ class _TimelineList extends StatelessWidget {
                         final urgentAll = items
                             .where((i) => i.type == 'lost' && i.data['urgent'] == true)
                             .toList();
-                        final urgentItems = urgentAll.take(4).toList();
+                        // 写真のときは横にスライドする帯なので10件まで、文字のときは4件まで
+                        final urgentItems = urgentAll.take(_mapTextMode ? 4 : 10).toList();
                         final urgentMore = urgentAll.length - urgentItems.length;
                         final gridItems = topItems.where((i) => !urgentItems.contains(i)).toList();
 
@@ -437,18 +438,40 @@ class _TimelineList extends StatelessWidget {
                                 ),
                               ),
                             if (urgentItems.isNotEmpty) ...[
-                              const Padding(
-                                padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-                                child: Text('🚨 緊急の迷子情報',
-                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.red)),
-                              ),
-                              // 大きすぎないように、新着と同じ大きさ・同じならべ方にする（社長 11/11）。赤いふちと「緊急」で目立たせる
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                                child: _mapTextMode
-                                    ? Column(children: urgentItems.map((it) => _TextRow(item: it, urgent: true)).toList())
-                                    : _tileGrid(urgentItems, urgent: true),
+                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                                child: Row(children: [
+                                  Text('🚨 緊急の迷子情報（${urgentAll.length}件）',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.red)),
+                                  const Spacer(),
+                                  if (!_mapTextMode && urgentItems.length > 1)
+                                    Text('横にスライド →', style: TextStyle(fontSize: 11, color: Colors.red[300])),
+                                ]),
                               ),
+                              // 写真のときは、小さめのカードを横にスライドする1列の帯にする（すき間が出ず、すぐ下の新着も見える。社長 11/11）
+                              _mapTextMode
+                                  ? Padding(
+                                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                      child: Column(
+                                          children: urgentItems.map((it) => _TextRow(item: it, urgent: true)).toList()),
+                                    )
+                                  : SizedBox(
+                                      height: 196,
+                                      child: ListView.separated(
+                                        scrollDirection: Axis.horizontal,
+                                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                        itemCount: urgentItems.length,
+                                        separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                        itemBuilder: (_, i) => SizedBox(
+                                          width: 150,
+                                          child: FadeSlideIn(
+                                            key: ValueKey('u${urgentItems[i].type}${urgentItems[i].id}'),
+                                            index: i,
+                                            child: _TimelineTile(item: urgentItems[i], urgent: true, imageAspect: 4 / 3),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                               if (urgentMore > 0)
                                 Padding(
                                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -585,14 +608,12 @@ class _TextRow extends StatelessWidget {
 }
 
 // 写真のカードのならべ方：どの画面の幅でも、1枚の幅は250まで。高さは「写真（正方形）＋文字2〜3行」にして、空白が出ないようにする
-// 緊急はいつも横2つ×縦2段（社長 11/11）。広い画面でも大きくなりすぎないように、2つぶんの幅までにして左に寄せる
-Widget _tileGrid(List<_TimelineItem> list, {bool urgent = false}) {
+Widget _tileGrid(List<_TimelineItem> list) {
   return LayoutBuilder(builder: (context, c) {
     const gap = 12.0;
-    final cols = urgent ? 2 : ((c.maxWidth + gap) / (250 + gap)).ceil().clamp(2, 6);
-    final maxW = urgent ? (c.maxWidth < 250 * 2 + gap ? c.maxWidth : 250 * 2 + gap) : c.maxWidth;
-    final w = (maxW - gap * (cols - 1)) / cols;
-    final grid = GridView.builder(
+    final cols = ((c.maxWidth + gap) / (250 + gap)).ceil().clamp(2, 6);
+    final w = (c.maxWidth - gap * (cols - 1)) / cols;
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -603,12 +624,11 @@ Widget _tileGrid(List<_TimelineItem> list, {bool urgent = false}) {
       ),
       itemCount: list.length,
       itemBuilder: (_, i) => FadeSlideIn(
-        key: ValueKey('${urgent ? 'u' : 'g'}${list[i].type}${list[i].id}'),
+        key: ValueKey('g${list[i].type}${list[i].id}'),
         index: i,
-        child: urgent ? Pulse(child: _TimelineTile(item: list[i], urgent: true)) : _TimelineTile(item: list[i]),
+        child: _TimelineTile(item: list[i]),
       ),
     );
-    return urgent ? Align(alignment: Alignment.centerLeft, child: SizedBox(width: maxW, child: grid)) : grid;
   });
 }
 
@@ -690,7 +710,9 @@ String _timelineSubtitle(_TimelineItem item) {
 class _TimelineTile extends StatelessWidget {
   final _TimelineItem item;
   final bool urgent;
-  const _TimelineTile({required this.item, this.urgent = false});
+  // 写真の縦横の比（ふつうは正方形。緊急の帯では少し横長にして小さくする）
+  final double imageAspect;
+  const _TimelineTile({required this.item, this.urgent = false, this.imageAspect = 1});
 
   Widget _placeholder() {
     return Container(
@@ -724,7 +746,7 @@ class _TimelineTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 1,
+              aspectRatio: imageAspect,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
