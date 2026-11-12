@@ -429,7 +429,10 @@ service cloud.firestore {
         allow read: if isEventMember(eventId) || isAdmin();
         // 送れる：参加者・主催者。送り主は自分・名前は自分のプロフィールの名前だけ
         // 「〜さんが参加しました🐾」のお知らせは、自分の名前の形のときだけ送れる（好きな文をお知らせにできない）
-        allow create: if isEventMember(eventId) && (
+        // 主催者にブロックされた人は、そのイベントのチャットに送れない（ブロックした人とは関わらない）
+        allow create: if isEventMember(eventId)
+          && notBlockedBy(get(/databases/$(database)/documents/events/$(eventId)).data.get('organizerUid', ''))
+          && (
           (request.resource.data.senderUid == request.auth.uid
             && request.resource.data.get('isSystem', false) == false
             && request.resource.data.get('senderName', '') in [myProfileName(''), '']) ||
@@ -444,7 +447,9 @@ service cloud.firestore {
           && request.resource.data.get('reactions', {}).size() == 0;
         // 変えられる：自分のメッセージ（送り主・名前・お知らせかどうか・種類は変えられない）
         // ほかの人のメッセージは、リアクションと投票の「自分の分」だけ
-        allow update: if isEventMember(eventId) && (
+        allow update: if isEventMember(eventId)
+          && notBlockedBy(get(/databases/$(database)/documents/events/$(eventId)).data.get('organizerUid', ''))
+          && (
           (resource.data.senderUid == request.auth.uid
             && !changed('senderUid') && !changed('senderName') && !changed('isSystem') && !changed('type')
             && !changed('reactions')
