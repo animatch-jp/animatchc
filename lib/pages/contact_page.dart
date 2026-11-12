@@ -92,7 +92,7 @@ class _ContactPageState extends State<ContactPage> {
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Text('内容を確認後、3〜5営業日以内にご返信します',
+                child: Text('内容を確認して、返事を書きます。返事は通知と、お問い合わせのページの下の「これまでのお問い合わせ」に届きます',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14,
                         color: Colors.grey[600], height: 1.6)),
@@ -144,7 +144,7 @@ class _ContactPageState extends State<ContactPage> {
                       style: TextStyle(fontSize: 20,
                           fontWeight: FontWeight.w900, color: Colors.white)),
                   SizedBox(height: 6),
-                  Text('お気軽にご連絡ください\n3〜5営業日以内にご返信します',
+                  Text('お気軽にご連絡ください\n返事は通知と、このページの下に届きます',
                       style: TextStyle(fontSize: 13,
                           color: Colors.white70, height: 1.5)),
                 ],
@@ -253,10 +253,94 @@ class _ContactPageState extends State<ContactPage> {
                         fontWeight: FontWeight.bold)),
               ),
             ),
+            const SizedBox(height: 28),
+            const _MyContacts(),
             const SizedBox(height: 24),
           ],
         ),
       ),
+    );
+  }
+}
+
+// これまでのお問い合わせと、運営からの返事（本人だけが見られる）
+class _MyContacts extends StatelessWidget {
+  const _MyContacts();
+
+  String _date(dynamic t) {
+    if (t is! Timestamp) return '';
+    final d = t.toDate();
+    return '${d.month}/${d.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('contacts').where('uid', isEqualTo: uid).snapshots(),
+      builder: (context, snap) {
+        final docs = [...?snap.data?.docs];
+        if (docs.isEmpty) return const SizedBox.shrink();
+        // 新しい順（並べかえはアプリでする）
+        docs.sort((a, b) {
+          final ta = a.data()['createdAt'], tb = b.data()['createdAt'];
+          if (ta is! Timestamp) return -1;
+          if (tb is! Timestamp) return 1;
+          return tb.compareTo(ta);
+        });
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('これまでのお問い合わせ',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+          const SizedBox(height: 8),
+          for (final d in docs)
+            Builder(builder: (_) {
+              final c = d.data();
+              final reply = (c['reply'] ?? '').toString();
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black.withOpacity(0.06)),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text(c['title'] ?? '',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                    ),
+                    Text(_date(c['createdAt']), style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(c['content'] ?? '',
+                      maxLines: 3, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                  const SizedBox(height: 8),
+                  if (reply.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF7F2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('AniMatch運営からの返事（${_date(c['repliedAt'])}）',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF2D6A4F))),
+                        const SizedBox(height: 4),
+                        Text(reply, style: const TextStyle(fontSize: 13, height: 1.5)),
+                      ]),
+                    )
+                  else
+                    Text('返事を待っています', style: TextStyle(fontSize: 11, color: Colors.orange[700])),
+                ]),
+              );
+            }),
+        ]);
+      },
     );
   }
 }

@@ -52,6 +52,17 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  final _feedKey = GlobalKey();
+  final _questionKey = GlobalKey();
+  final _guideKey = GlobalKey();
+
+  // その場所まで、すっとスクロールする
+  void _jump(GlobalKey key) {
+    final c = key.currentContext;
+    if (c == null) return;
+    Scrollable.ensureVisible(c, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -136,11 +147,20 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                  const _StartGuideCard(),
+                  // ホームがのびても迷わないように、よく使う場所へすぐ行けるボタン（スライドしなくても全部見える）
+                  _HomeShortcuts(
+                    onFeed: () => _jump(_feedKey),
+                    onQuestion: () => _jump(_questionKey),
+                    onGuide: () async {
+                      await StartGuide.restore();
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _jump(_guideKey));
+                    },
+                  ),
+                  KeyedSubtree(key: _guideKey, child: const _StartGuideCard()),
                   const _CareReminderCard(),
                   const _PetTaskReminder(),
                   const _MemoryCard(),
-                  const _QuestionBoardPreview(),
+                  KeyedSubtree(key: _questionKey, child: const _QuestionBoardPreview()),
                 ],
               ),
             ),
@@ -148,7 +168,7 @@ class _HomePageState extends State<HomePage> {
               child: SizedBox(height: 20),
             ),
             SliverToBoxAdapter(
-              child: HomeFeedSection(),
+              child: KeyedSubtree(key: _feedKey, child: HomeFeedSection()),
             ),
 
           ],
@@ -157,6 +177,55 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+// ホームの上の「すぐ行ける」ボタン。4つを同じ幅で並べる
+class _HomeShortcuts extends StatelessWidget {
+  final VoidCallback onFeed;
+  final VoidCallback onQuestion;
+  final VoidCallback onGuide;
+  const _HomeShortcuts({required this.onFeed, required this.onQuestion, required this.onGuide});
+
+  Widget _item(String emoji, String label, VoidCallback onTap) {
+    return Expanded(
+      child: Pressable(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label,
+                  maxLines: 1,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF3D2B1F))),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Row(children: [
+        _item('📸', 'みんなの投稿', onFeed),
+        _item('🏆', 'ランキング',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RankingPage()))),
+        _item('🙋', '質問掲示板', onQuestion),
+        _item('🐾', 'はじめてのこと', onGuide),
+      ]),
+    );
+  }
+}
+
 class _QuestionBoardPreview extends StatelessWidget {
   const _QuestionBoardPreview();
 
@@ -653,7 +722,16 @@ class _StartGuideCardState extends State<_StartGuideCard> {
   void initState() {
     super.initState();
     _load();
+    StartGuide.changed.addListener(_reload);
   }
+
+  @override
+  void dispose() {
+    StartGuide.changed.removeListener(_reload);
+    super.dispose();
+  }
+
+  void _reload() => _load();
 
   Future<void> _load({bool celebrate = false}) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -678,7 +756,8 @@ class _StartGuideCardState extends State<_StartGuideCard> {
         _hasPost = hasPost;
         _orgSeen = orgSeen;
         // 最初から全部できている人には出さない。ここでできた人には、お祝いのあとで閉じる
-        if (!celebrate) _hide = allDone;
+        // ただし「もう一度見る」を押した人には、全部できていても出す
+        if (!celebrate) _hide = allDone && st['pinned'] != true;
         _loaded = true;
       });
       if (celebrate && _doneCount > before && mounted) {

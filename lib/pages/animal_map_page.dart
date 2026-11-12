@@ -165,6 +165,75 @@ Widget _chips() {
   );
 }
 
+// 迷子は、ふつうの人もだれでも投稿できる。気づきやすいように「すべて」の上に1行出す（社長 11/12）
+Widget _lostPostHint() {
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    child: Pressable(
+      onTap: () => showLostPetPostSheet(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF4FC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF3498DB).withOpacity(0.3)),
+        ),
+        child: const Row(children: [
+          Text('🔍', style: TextStyle(fontSize: 16)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text('迷子をさがしている・見かけた人は、だれでも投稿できます',
+                style: TextStyle(fontSize: 12, color: Color(0xFF1F5F8B), fontWeight: FontWeight.w700)),
+          ),
+          Text('投稿する', style: TextStyle(fontSize: 12, color: Color(0xFF3498DB), fontWeight: FontWeight.w900)),
+          Icon(Icons.chevron_right, size: 18, color: Color(0xFF3498DB)),
+        ]),
+      ),
+    ),
+  );
+}
+
+// どうぶつマップを使うときの注意（右上の「注意」から開く）
+void _showMapNotes() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (c) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('どうぶつマップを使うときの注意',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
+          const SizedBox(height: 14),
+          for (final n in const [
+            ['🐾', '里親になりたいとき', '申しこみや条件は、団体ごとにちがいます。チャットで団体にたずねてから決めてください。動物を迎えるのは、家族みんなで話し合ってから。'],
+            ['🔍', '迷子をさがしている・見かけたとき', '住所や電話番号など、くわしい個人情報は書かないでください。見かけた場所と時間、動物の特ちょうを書くと見つかりやすくなります。見つかったら「見つかりました」にしてください。'],
+            ['🤝', 'ボランティアに行くとき', '日時や持ちものは、団体の募集をよく読んでください。行けなくなったら、早めに団体に伝えましょう。'],
+            ['🏥', '動物病院', 'のっている情報は、病院が自分で書いたものです。行く前に、診療時間や休みを病院に確かめてください。急ぎのときは、まず電話を。'],
+            ['🚨', 'あやしいと思ったら', 'お金や個人情報を求められたら、やりとりをやめて、その投稿を通報してください。'],
+          ])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(n[0], style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(n[1], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF3D2B1F))),
+                    const SizedBox(height: 2),
+                    Text(n[2], style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5)),
+                  ]),
+                ),
+              ]),
+            ),
+        ]),
+      ),
+    ),
+  );
+}
+
 Widget _categoryTab(String value, String emoji, String label) {
   final sel = _category == value;
   return Expanded(
@@ -206,6 +275,11 @@ style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3D2B1F))),
 backgroundColor: const Color(0xFFFFF8F5),
 elevation: 0,
 actions: [
+  IconButton(
+    tooltip: '使うときの注意',
+    onPressed: _showMapNotes,
+    icon: const Icon(Icons.info_outline_rounded, color: Color(0xFF3D2B1F)),
+  ),
   // 写真で見る／文字だけで見る（社長 11/11）。アプリを開いているあいだは、選んだほうを覚えておく
   Padding(
     padding: const EdgeInsets.only(right: 12),
@@ -230,6 +304,7 @@ actions: [
 body: _category == 'all'
 ? Column(children: [
   _chips(),
+  _lostPostHint(),
   Expanded(child: _TimelineList(
     controller: _scroll,
     onShowUrgentLost: () => setState(() {

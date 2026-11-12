@@ -9,6 +9,7 @@ import 'delete_account_page.dart';
 import 'notification_settings_page.dart';
 import 'abuse_report_page.dart';
 import 'package:flutter/material.dart';
+import '../services/start_guide.dart';
 import '../services/tab_reselect.dart';
 import '../widgets/login_help.dart';
 import '../widgets/motion.dart';
@@ -939,6 +940,18 @@ class _ProfilePageState extends State<ProfilePage> {
                       onTap: () => Navigator.push(context,
                           MaterialPageRoute(
                               builder: (_) => const TermsPage())),
+                    ),
+                    const Divider(height: 1),
+                    _MenuItem(
+                      icon: Icons.flag_rounded,
+                      label: '「はじめてのこと」をもう一度見る',
+                      onTap: () async {
+                        await StartGuide.restore();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('ホームに「はじめてのこと」を出しました')),
+                        );
+                      },
                     ),
                     const Divider(height: 1),
                     _MenuItem(

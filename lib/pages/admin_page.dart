@@ -1026,6 +1026,54 @@ const SizedBox(height: 16),
 Future<void> _deleteReport(String reportId) async {
   await FirebaseFirestore.instance.collection('reports').doc(reportId).delete();
 }
+  Future<void> _replyToContact(BuildContext context, String contactId, Map<String, dynamic> data) async {
+    final ctrl = TextEditingController(text: (data['reply'] ?? '').toString());
+    final text = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('返事を書く'),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 6,
+          maxLength: 1000,
+          decoration: const InputDecoration(hintText: 'お問い合わせへの返事'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('やめる')),
+          ElevatedButton(onPressed: () => Navigator.pop(c, ctrl.text.trim()), child: const Text('送る')),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty) return;
+    try {
+      await FirebaseFirestore.instance.collection('contacts').doc(contactId).update({
+        'reply': text,
+        'repliedAt': FieldValue.serverTimestamp(),
+        'status': '対応済み',
+      });
+      final uid = (data['uid'] ?? '').toString();
+      if (uid.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('notifications').doc(uid).collection('items').add({
+          'type': 'admin',
+          'emoji': '📩',
+          'title': 'お問い合わせに返事が届きました',
+          'desc': text.length > 60 ? '${text.substring(0, 60)}…' : text,
+          'senderUid': FirebaseAuth.instance.currentUser?.uid ?? '',
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('返事を送りました')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('送れませんでした'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
   Widget _buildContactList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -1076,7 +1124,25 @@ Future<void> _deleteReport(String reportId) async {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(data['content'] ?? ''),
+                        if ((data['reply'] ?? '').toString().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text('返事：${data['reply']}', style: const TextStyle(color: Color(0xFF2D6A4F))),
+                        ],
                         const SizedBox(height: 12),
+                        // 返事を書くと、その人の「これまでのお問い合わせ」と通知に届く
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _replyToContact(context, contactId, data),
+                            icon: const Icon(Icons.reply_rounded),
+                            label: Text((data['reply'] ?? '').toString().isEmpty ? '返事を書く' : '返事を書き直す'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2D6A4F),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(

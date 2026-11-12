@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // 「はじめてのこと」の進みぐあい（本人しか読めない users/{uid}/private/onboarding）
@@ -32,9 +33,20 @@ class StartGuide {
     } catch (_) {}
   }
 
+  // ホームの案内に「読み直して」と伝える
+  static final ValueNotifier<int> changed = ValueNotifier<int>(0);
+
   static Future<void> dismiss() async {
     try {
-      await _ref()?.set({'dismissed': true}, SetOptions(merge: true));
+      await _ref()?.set({'dismissed': true, 'pinned': false}, SetOptions(merge: true));
     } catch (_) {}
+  }
+
+  // 閉じた案内を、もう一度ホームに出す（マイページ・ホームの「はじめて」から）
+  static Future<void> restore() async {
+    try {
+      await _ref()?.set({'dismissed': false, 'pinned': true}, SetOptions(merge: true));
+    } catch (_) {}
+    changed.value++;
   }
 }

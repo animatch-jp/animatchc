@@ -247,6 +247,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
       );
       return;
     }
+    // 文字を変換しているとちゅうだと、上限より長いまま保存しようとしてしまう。先に止めて、わかる言葉で伝える
+    final tooLong = <String>[
+      if (_nameCtrl.text.trim().runes.length > 20) 'ニックネームは20文字まで',
+      if (_bioCtrl.text.trim().runes.length > 300) '自己紹介は300文字まで',
+      if (_mottoCtrl.text.trim().runes.length > 30) 'ひとことは30文字まで',
+    ];
+    if (tooLong.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${tooLong.join('、')}です。短くしてから保存してください'), backgroundColor: Colors.red),
+      );
+      return;
+    }
     // 名前を変えたときだけ、使える名前か確かめる
     if (_nameCtrl.text.trim() != (widget.userData['name'] ?? '').toString().trim()) {
       final nameError = await NameRules.check(_nameCtrl.text,
@@ -339,9 +351,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     } catch (e) {
       print('🔥 保存エラー: $e');
       if (mounted) {
+        // むずかしい英語のエラーは見せない
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('エラー: $e'),
+          const SnackBar(
+              content: Text('保存できませんでした。文字の長さや内容を確かめて、もう一度おためしください'),
               backgroundColor: Colors.red),
         );
       }
