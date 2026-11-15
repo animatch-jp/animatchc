@@ -4,7 +4,7 @@ import '../services/private_account.dart';
 import 'home_page.dart';
 import 'chat_list_page.dart';
 import 'profile_page.dart';
-import 'hiroba_page.dart';
+import 'event_hub_page.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -99,7 +99,7 @@ class _RootPageState extends State<RootPage> {
   List<Widget> get _pages => [
     HomePage(scrollController: _homeScrollController),
     const AnimalMapPage(),
-    const HirobaPage(),
+    const EventHubPage(),
     const ChatListPage(),
     const ProfilePage(),
   ];
@@ -177,8 +177,8 @@ class _RootPageState extends State<RootPage> {
                     selected: _idx == 1,
                     onTap: () => _selectTab(1)),
                 _NavItem(
-                    icon: Icons.diversity_3_rounded,
-                    label: 'ひろば',
+                    icon: Icons.celebration_rounded,
+                    label: 'イベント',
                     selected: _idx == 2,
                     onTap: () => _selectTab(2)),
                 ValueListenableBuilder<int>(

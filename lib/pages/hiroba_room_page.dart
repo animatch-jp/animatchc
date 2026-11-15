@@ -1,4 +1,4 @@
-// 「ひろば」の部屋：ひとことを書いたり、スタンプを押したりする場所
+// イベントの部屋（アプリの中のイベント・どうぶつ別の部屋）：ひとこと・写真・スタンプで参加する場所
 // ・入っても、だれにも知らされない（見るだけでもよい）
 // ・名前を押してもプロフィールは開かない（ここから 1対1 のメッセージは送れない）
 // ・長押しで「通報」「この人をブロック」。自分の投稿は「消す」
@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/blocked_users.dart';
+import '../services/cloudinary_service.dart';
 import '../services/content_filter.dart';
 import '../widgets/festive_backdrop.dart';
 import '../widgets/motion.dart';
@@ -31,6 +32,9 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
   final _focus = FocusNode();
   bool _hideName = false;
   bool _sending = false;
+  bool _uploading = false;
+  String? _imageUrl; // これから送る写真
+  bool _popular = false; // 写真大会：スタンプの多い順
   String _myName = '名無しさん';
 
   HirobaRoom get room => widget.room;
@@ -73,7 +77,12 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
   Future<void> _send(String raw) async {
     final text = raw.trim();
     final me = _me;
-    if (text.isEmpty || me == null || _sending) return;
+    final image = _imageUrl;
+    if ((text.isEmpty && image == null) || me == null || _sending) return;
+    if (!_isOpen) {
+      _snack(_closedText);
+      return;
+    }
     if (text.runes.length > 140) {
       _snack('140文字までです。少し短くしてください');
       return;
@@ -83,7 +92,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
       _snack('少しだけ時間をあけてから送ってください🐾');
       return;
     }
-    if (ContentFilter.blocked(context, [text])) return;
+    if (text.isNotEmpty && ContentFilter.blocked(context, [text])) return;
     setState(() => _sending = true);
     try {
       await _col.add({
@@ -93,14 +102,16 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'reactions': <String, dynamic>{},
         if (room.span != null) 'span': room.span,
+        if (image != null) 'imageUrl': image,
       });
       _lastPost = DateTime.now();
       _ctrl.clear();
+      _imageUrl = null;
       _focus.unfocus();
       if (!_celebrated && mounted) {
         _celebrated = true;
         showHappyBurst(context,
-            message: 'ひろばデビュー！', sub: 'ひとこと、ありがとう', emoji: room.emoji, color: room.colors.last);
+            message: 'イベントに参加しました！', sub: '参加してくれて、ありがとう', emoji: room.emoji, color: room.colors.last);
       }
     } catch (e) {
       debugPrint('ひろばの投稿のエラー: $e');
@@ -108,6 +119,35 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  bool get _isOpen {
+    final now = DateTime.now();
+    final o = room.opensAt, c = room.closesAt;
+    if (o != null && now.isBefore(o)) return false;
+    if (c != null && !now.isBefore(c)) return false;
+    return true;
+  }
+
+  String get _closedText {
+    final o = room.opensAt, c = room.closesAt;
+    if (o != null && DateTime.now().isBefore(o)) {
+      return '${whenText(o)}に開きます。それまでは読むだけです';
+    }
+    if (c != null) return 'この会は終わりました。読むことはできます';
+    return 'いまは書きこめません';
+  }
+
+  Future<void> _pickImage() async {
+    if (_uploading) return;
+    setState(() => _uploading = true);
+    final url = await CloudinaryService.pickAndUploadImage();
+    if (!mounted) return;
+    setState(() {
+      _uploading = false;
+      if (url != null) _imageUrl = url;
+    });
+    if (url == null) _snack('写真を入れられませんでした。もう一度ためしてください');
   }
 
   Future<void> _toggleReaction(String postId, String key, bool mine) async {
@@ -200,7 +240,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                     builder: (_) => ReportPage(
                       userName: (d['name'] as String?) ?? 'このユーザー',
                       targetUid: (d['uid'] as String?) ?? '',
-                      contentLabel: 'ひろばの投稿',
+                      contentLabel: 'イベントの投稿',
                       contentRef: 'hiroba/${room.id}/hirobaPosts/$postId',
                       contentText: d['text'] as String?,
                     ),
@@ -235,7 +275,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
       context: context,
       builder: (dc) => AlertDialog(
         title: const Text('ブロックしますか？'),
-        content: const Text('この人の投稿は、ひろばやほかの場所で見えなくなります。あとからマイページの「ブロックした人」で外せます。'),
+        content: const Text('この人の投稿は、イベントやほかの場所で見えなくなります。あとからマイページの「ブロックした人」で外せます。'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dc, false), child: const Text('やめる')),
           ElevatedButton(
@@ -321,9 +361,39 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
       ),
       body: Column(children: [
         _promptBanner(),
+        if (room.showPopular)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('新しい順')),
+                ButtonSegment(value: true, label: Text('スタンプの多い順')),
+              ],
+              selected: {_popular},
+              onSelectionChanged: (v) => setState(() => _popular = v.first),
+            ),
+          ),
         Expanded(child: _postList()),
-        _composer(),
+        if (_isOpen) _composer() else _closedBar(),
       ]),
+    );
+  }
+
+  Widget _closedBar() {
+    return Material(
+      color: Colors.white,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(children: [
+            const Icon(Icons.schedule, color: _brown),
+            const SizedBox(width: 10),
+            Expanded(child: Text(_closedText, style: const TextStyle(color: _brown))),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -342,8 +412,8 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _brown)),
         const SizedBox(height: 3),
         Text(
-          room.id == 'soudan'
-              ? '見るだけでも大丈夫。くわしい相談は「質問掲示板」へどうぞ'
+          room.allowPhoto
+              ? '見るだけでも大丈夫。🐾 スタンプ1つ、写真1枚からどうぞ'
               : '見るだけでも大丈夫。🐾 スタンプ1つからどうぞ',
           style: TextStyle(fontSize: 12, color: Colors.grey[600]),
         ),
@@ -372,9 +442,17 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
 
               docs.sort((a, b) => ms(b).compareTo(ms(a)));
             }
+            if (_popular) {
+              int score(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+                final r = (d.data()['reactions'] as Map<String, dynamic>?) ?? const {};
+                return r.values.fold<int>(0, (n, v) => n + ((v as List?)?.length ?? 0));
+              }
+
+              docs.sort((a, b) => score(b).compareTo(score(a)));
+            }
             if (docs.isEmpty) return _empty();
             return ListView.builder(
-              reverse: true,
+              reverse: !_popular,
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               itemCount: docs.length,
               itemBuilder: (_, i) => _post(docs[i].id, docs[i].data()),
@@ -416,7 +494,8 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
     final me = _me;
     final mine = d['uid'] == me;
     final text = (d['text'] as String?) ?? '';
-    final onlyStamp = text.runes.length <= 2 && quickStamps.contains(text);
+    final img = d['imageUrl'] as String?;
+    final onlyStamp = img == null && text.runes.length <= 2 && quickStamps.contains(text);
     final reactions = (d['reactions'] as Map<String, dynamic>?) ?? const {};
     final chips = <Widget>[];
     for (final r in hirobaReactions) {
@@ -466,8 +545,25 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                         BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1)),
                       ],
                     ),
-              child: Text(text,
-                  style: TextStyle(fontSize: onlyStamp ? 40 : 15, color: _brown, height: 1.4)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (img != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(img,
+                          height: 240,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const SizedBox(
+                              height: 80, child: Center(child: Text('写真を読みこめませんでした')))),
+                    ),
+                  if (img != null && text.isNotEmpty) const SizedBox(height: 6),
+                  if (text.isNotEmpty)
+                    Text(text,
+                        style: TextStyle(fontSize: onlyStamp ? 40 : 15, color: _brown, height: 1.4)),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -508,7 +604,32 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
               ),
             ),
             const SizedBox(height: 6),
+            if (_imageUrl != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(_imageUrl!, width: 56, height: 56, fit: BoxFit.cover),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text('この写真を送ります（ひとことは、なくてもOK）', style: TextStyle(fontSize: 12))),
+                  IconButton(
+                    tooltip: '写真をやめる',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(() => _imageUrl = null),
+                  ),
+                ]),
+              ),
             Row(children: [
+              if (room.allowPhoto)
+                IconButton(
+                  tooltip: '写真をえらぶ',
+                  icon: _uploading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Icon(Icons.add_photo_alternate_outlined, color: room.colors.last),
+                  onPressed: _sending || _uploading ? null : _pickImage,
+                ),
               IconButton(
                 tooltip: 'スタンプだけ送る',
                 icon: Icon(Icons.emoji_emotions_outlined, color: room.colors.last),
@@ -525,7 +646,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                   decoration: InputDecoration(
                     counterText: '',
                     isDense: true,
-                    hintText: 'ひとことどうぞ（140文字まで）',
+                    hintText: room.allowPhoto ? 'ひとこと（写真だけでもOK）' : 'ひとことどうぞ（140文字まで）',
                     filled: true,
                     fillColor: const Color(0xFFF5F0EB),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

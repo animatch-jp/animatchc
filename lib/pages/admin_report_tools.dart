@@ -277,11 +277,11 @@ class ReportedContentCard extends StatelessWidget {
   Future<void> _open(BuildContext context) async {
     if (_isHiroba) {
       final roomId = _firstId;
-      final room = hirobaRooms.where((r) => r.id == roomId).firstOrNull;
+      final room = animalGroups.map((g) => g.room).where((r) => r.id == roomId).firstOrNull;
       if (room == null) {
         // お題・お祭りの部屋は日によって中身がかわるので、中身はこのカードで確かめる
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('お題・お祭りの部屋の投稿です。中身は上の文で確かめてください')));
+            const SnackBar(content: Text('期間のあるイベントの投稿です。中身は上の文で確かめてください')));
         return;
       }
       Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: room)));

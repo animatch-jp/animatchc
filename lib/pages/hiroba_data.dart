@@ -19,6 +19,10 @@ class HirobaRoom {
   // お題・お祭りの部屋だけ：同じ部屋の中で、その日（その年）の分だけを見せる印
   final String? span;
   final String? prompt; // 上に出す問いかけ
+  final bool allowPhoto; // 写真をつけて投稿できる
+  final DateTime? opensAt; // 決まった時間だけ書ける部屋（話しあい会）
+  final DateTime? closesAt;
+  final bool showPopular; // 「スタンプの多い順」も見られる（写真大会）
   const HirobaRoom({
     required this.id,
     required this.emoji,
@@ -29,63 +33,64 @@ class HirobaRoom {
     this.starters = const [],
     this.span,
     this.prompt,
+    this.allowPhoto = false,
+    this.opensAt,
+    this.closesAt,
+    this.showPopular = false,
   });
 }
 
-// いつでも開いている部屋
-const List<HirobaRoom> hirobaRooms = [
-  HirobaRoom(
-    id: 'jiman',
-    emoji: '🐶',
-    name: 'うちの子じまん',
-    desc: '「かわいい」を、ひとことで',
-    colors: [Color(0xFFFF9A6B), Color(0xFFFF6F91)],
-    starters: ['うちの子の今日のかわいいところ：', '見てください、うちの子が'],
-  ),
-  HirobaRoom(
-    id: 'warai',
-    emoji: '😂',
-    name: 'くすっと話',
-    desc: 'ペットのおもしろ話',
-    colors: [Color(0xFFFFC94A), Color(0xFFFF9F43)],
-    starters: ['さっきうちの子が', 'これ、うちだけ？'],
-  ),
-  HirobaRoom(
-    id: 'soudan',
-    emoji: '🔰',
-    name: 'はじめての相談',
-    desc: '小さな「どうしよう」を気軽に',
-    colors: [Color(0xFF6BCB77), Color(0xFF2D9C8F)],
-    style: BackdropStyle.stars,
-    starters: ['はじめて飼う人です。', 'ちょっと聞きたいんですが、'],
-  ),
-  HirobaRoom(
-    id: 'yoru',
-    emoji: '🌙',
-    name: '夜のまったり',
-    desc: '寝る前に、のんびりおしゃべり',
-    colors: [Color(0xFF3B3B98), Color(0xFF7B4397)],
-    style: BackdropStyle.lantern,
-    starters: ['こんばんは〜🌙', '今日のうちの子は'],
-  ),
-  HirobaRoom(
-    id: 'hogo',
-    emoji: '🏠',
-    name: '保護っ子のはなし',
-    desc: '保護犬・保護猫のこと、なんでも',
-    colors: [Color(0xFF48C6EF), Color(0xFF6F86D6)],
-    style: BackdropStyle.stars,
-    starters: ['保護っ子をお迎えして', '保護犬・保護猫に興味があって'],
-  ),
-  HirobaRoom(
-    id: 'suki',
-    emoji: '💛',
-    name: '飼ってなくても動物好き',
-    desc: 'ペットがいなくても大歓迎',
-    colors: [Color(0xFFF78CA0), Color(0xFFA18CD1)],
-    starters: ['飼ってないけど、', 'いちばん好きな動物は'],
-  ),
+// どうぶつ別の集まり（いつでも開いている部屋）。犬・猫だけでなく、うさぎ・小鳥・爬虫類なども同じように並べる
+class AnimalGroup {
+  final String key; // 部屋は ani_{key}
+  final String emoji;
+  final String name; // イベントの「どの動物の会」と同じ文字
+  final List<Color> colors;
+  final String note; // 会うイベントでの気づかい
+  const AnimalGroup(this.key, this.emoji, this.name, this.colors, this.note);
+
+  HirobaRoom get room => HirobaRoom(
+        id: 'ani_$key',
+        emoji: emoji,
+        name: '$nameの部屋',
+        desc: '$nameと暮らす人・$nameが好きな人の部屋',
+        colors: colors,
+        style: BackdropStyle.stars,
+        starters: ['うちの$nameは', '$nameのことで聞きたいんですが、'],
+        allowPhoto: true,
+      );
+}
+
+const _restNote = '移動や温度の変化が負担になりやすい子も多いので、会うイベントは「動物はお留守番（人だけ）」の会がおすすめです。アプリの中のイベントなら、おうちからいっしょに参加できます。';
+
+const List<AnimalGroup> animalGroups = [
+  AnimalGroup('dog', '🐶', '犬', [Color(0xFFFFA26B), Color(0xFFE8845A)],
+      'おさんぽ会では、ほかの犬が苦手な子もいます。あいさつは飼い主さんに声をかけてから。'),
+  AnimalGroup('cat', '🐱', '猫', [Color(0xFFF78CA0), Color(0xFFC86DD7)],
+      '猫は外へ連れ出すのが負担になりやすいので、人だけの会や、アプリの中のイベントがおすすめです。'),
+  AnimalGroup('rabbit', '🐰', 'うさぎ', [Color(0xFFFFB7C5), Color(0xFFFF8FA3)], _restNote),
+  AnimalGroup('bird', '🐦', '小鳥', [Color(0xFF7BE0AD), Color(0xFF2D9C8F)], _restNote),
+  AnimalGroup('small', '🐹', 'ハムスター・小動物', [Color(0xFFFFD36B), Color(0xFFF2A65A)], _restNote),
+  AnimalGroup('ferret', '🐾', 'フェレット', [Color(0xFFC3A27A), Color(0xFF8D6E63)], _restNote),
+  AnimalGroup('reptile', '🦎', '爬虫類', [Color(0xFF8BC34A), Color(0xFF33691E)], _restNote),
+  AnimalGroup('other', '🐟', '魚・両生類・そのほか', [Color(0xFF48C6EF), Color(0xFF3B6FD6)], _restNote),
 ];
+
+// 会うイベントで選べる「どの動物の会」
+List<String> get eventAnimalChoices => ['どの動物でも', ...animalGroups.map((g) => g.name)];
+
+// 会うイベントの「安心のしるし」（ルールでは8こまで）
+const List<String> eventSafetyTags = [
+  'はじめて歓迎',
+  '1人参加OK',
+  '見学だけOK',
+  '少人数（10人まで）',
+  '話さなくてOK',
+  '動物はお留守番（人だけ）',
+];
+
+// むかしの部屋（もう出さないが、ルール・削除・通報では使う）
+const List<String> legacyRoomIds = ['jiman', 'warai', 'soudan', 'yoru', 'hogo', 'suki', 'topic'];
 
 // どの部屋でも出す「話しはじめのことば」
 const List<String> commonStarters = [
@@ -111,61 +116,206 @@ const List<(String, String, String)> hirobaReactions = [
 // 名前を出さないで書くときの名前（ルールと同じ文字）
 const String hiddenName = 'ないしょさん';
 
-/* ---------------- 今日のお題 ---------------- */
-
-const List<String> dailyTopics = [
-  'うちの子の「寝相」、どんな感じ？',
-  'ペットのおもしろい呼び名、ありますか？',
-  '今日いちばんかわいかった瞬間は？',
-  '好きな動物と、その理由をひとこと',
-  'うちの子の好きなおやつは？',
-  'ペットと行ってみたい場所は？',
-  'うちの子の「くせ」を教えて',
-  '子どものころ好きだった動物は？',
-  'お散歩のとっておきの時間帯は？',
-  '名前の由来、教えて！',
-  'いつか飼ってみたい動物は？',
-  'ペットにされてうれしかったことは？',
-  '寒い日の、うちの子の過ごし方は？',
-  'うちの子を、動物以外にたとえると？',
-  '保護犬・保護猫について、知りたいことは？',
-  'はじめてペットを迎えた日のこと、覚えてる？',
-  'うちの子のチャームポイントは？',
-  'ペットのおもちゃ、いちばん人気は？',
-  '動物園・水族館で好きな場所は？',
-  'ペットと一緒にしたい、小さな目標は？',
-  'ペットのいる暮らしで、いちばん好きな時間は？',
-  '今日の気分を、動物であらわすと？',
-  '好きな動物の豆知識をひとつ',
-  'うちの子の「おかえり」の迎え方は？',
-  'もし動物と話せたら、何を聞いてみたい？',
-  'うちの子の苦手なものは？',
-  '最近ちょっとうれしかったこと（動物以外でもOK）',
-  'うちの子の「おねだり」のしかたは？',
-  '動物のどんなしぐさが好き？',
-  'うちの子に、ひとことメッセージ！',
-];
-
 String dayKey(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-HirobaRoom todayTopicRoom(DateTime now) {
-  final days = DateTime.utc(now.year, now.month, now.day)
-      .difference(DateTime.utc(2026, 1, 1))
-      .inDays;
-  final topic = dailyTopics[days % dailyTopics.length];
-  return HirobaRoom(
-    id: 'topic',
-    emoji: '💬',
-    name: '今日のお題',
-    desc: topic,
-    colors: const [Color(0xFF00C9A7), Color(0xFF4D8076)],
-    style: BackdropStyle.bunting,
-    span: dayKey(now),
-    prompt: topic,
-    starters: const ['うちの場合は、', '飼っていないけど、'],
-  );
+/* ---------------- アプリの中のイベント（運営が毎週ひらく） ---------------- */
+
+// 写真大会のテーマ（どの動物でも撮れるもの）
+const List<String> photoThemes = [
+  'おやすみ姿',
+  'ごはんタイム',
+  'お気に入りの場所',
+  '横顔',
+  'おめめ',
+  'あし・手・しっぽ',
+  'おうち自慢（ケージ・水そうも）',
+  '日なたぼっこ',
+  'おもちゃといっしょ',
+  'ふしぎなポーズ',
+  'まんまる',
+  'うちの子のドヤ顔',
+];
+
+// みんなでチャレンジ（みんなで目標の数を集める）
+const List<String> challengeThemes = [
+  'うちの子に「ありがとう」を伝えよう',
+  'おうちの安全チェック（かじる物・飲みこむ物を片づけた）',
+  '温度と湿度をチェックしよう（小鳥・うさぎ・爬虫類にも大事）',
+  '保護動物のことを、1つ知ろう',
+  'うちの子の体重をはかろう',
+  '防災の準備をひとつ（キャリー・ごはん・お薬）',
+];
+
+// 話しあい会のテーマ（犬・猫以外の子の回も同じように入れる）
+const List<String> talkTopics = [
+  'はじめて飼うなら？ みんなの体験',
+  '爬虫類・両生類の冬じたく（温度と湿度）',
+  '保護犬・保護猫を迎えて変わったこと',
+  '小鳥の放鳥タイム、どうしてる？',
+  'シニアになったうちの子との暮らし',
+  'うさぎの換毛期の乗りきり方',
+  '旅行や外出のとき、うちの子はどうしてる？',
+  'ハムスター・小動物のおうちづくり',
+  'うちの子の名前の由来',
+  'フェレットのいたずら話',
+];
+
+class OnlineEvent {
+  final String kind; // photo / challenge / talk / fes
+  final String emoji;
+  final String title;
+  final String theme;
+  final DateTime start, end;
+  final List<Color> colors;
+  final BackdropStyle style;
+  final String span;
+  final int? goal;
+  final String howTo; // 参加のしかた（1行）
+  const OnlineEvent({
+    required this.kind,
+    required this.emoji,
+    required this.title,
+    required this.theme,
+    required this.start,
+    required this.end,
+    required this.colors,
+    required this.style,
+    required this.span,
+    required this.howTo,
+    this.goal,
+  });
+
+  String get roomId => kind == 'fes' ? 'fes_${span.split('-').first}' : kind;
+  bool isLive(DateTime now) => !now.isBefore(start) && now.isBefore(end);
+
+  HirobaRoom get room => HirobaRoom(
+        id: roomId,
+        emoji: emoji,
+        name: title,
+        desc: theme,
+        colors: colors,
+        style: style,
+        span: span,
+        prompt: kind == 'photo' ? 'テーマ「$theme」' : theme,
+        allowPhoto: kind == 'photo' || kind == 'fes',
+        showPopular: kind == 'photo',
+        opensAt: kind == 'talk' ? start : null,
+        closesAt: kind == 'talk' ? end : null,
+        starters: switch (kind) {
+          'photo' => const ['うちの子の', 'はじめて参加します！'],
+          'challenge' => const ['やりました！', 'うちでは'],
+          'talk' => const ['こんばんは〜', 'うちの場合は、', '見てるだけですが、参考になります'],
+          _ => const ['うちの子は'],
+        },
+      );
 }
+
+DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
+int _weekIndex(DateTime monday) => monday.difference(DateTime(2026, 1, 5)).inDays ~/ 7;
+
+// その週の月曜
+DateTime mondayOf(DateTime d) => _day(d).subtract(Duration(days: d.weekday - 1));
+
+List<OnlineEvent> _weekEvents(DateTime monday) {
+  final w = _weekIndex(monday);
+  final fri = monday.add(const Duration(days: 4));
+  final wed = monday.add(const Duration(days: 2));
+  final sun = monday.add(const Duration(days: 6));
+  final photo = photoThemes[w % photoThemes.length];
+  final ch = challengeThemes[w % challengeThemes.length];
+  return [
+    OnlineEvent(
+      kind: 'challenge',
+      emoji: '🤝',
+      title: 'みんなでチャレンジ',
+      theme: ch,
+      start: monday,
+      end: monday.add(const Duration(days: 4)),
+      colors: const [Color(0xFF00C9A7), Color(0xFF4D8076)],
+      style: BackdropStyle.bunting,
+      span: 'ch-${dayKey(monday)}',
+      goal: 100,
+      howTo: 'やったら「やりました！」とひとこと。スタンプだけでもOK',
+    ),
+    OnlineEvent(
+      kind: 'talk',
+      emoji: '🌙',
+      title: '水曜の話しあい会',
+      theme: talkTopics[(w * 2) % talkTopics.length],
+      start: wed.add(const Duration(hours: 21)),
+      end: wed.add(const Duration(hours: 21, minutes: 45)),
+      colors: const [Color(0xFF3B3B98), Color(0xFF7B4397)],
+      style: BackdropStyle.lantern,
+      span: 'talk-${dayKey(wed)}',
+      howTo: '21:00〜21:45だけ開く部屋。見るだけでもOK',
+    ),
+    OnlineEvent(
+      kind: 'photo',
+      emoji: '📸',
+      title: '週末の写真大会',
+      theme: photo,
+      start: fri,
+      end: monday.add(const Duration(days: 7)),
+      colors: const [Color(0xFFFF9A6B), Color(0xFFFF6F91)],
+      style: BackdropStyle.bunting,
+      span: 'photo-${dayKey(fri)}',
+      howTo: 'テーマに合う写真を1枚。どの動物でもOK。スタンプで応援も',
+    ),
+    OnlineEvent(
+      kind: 'talk',
+      emoji: '☕',
+      title: '日曜の話しあい会',
+      theme: talkTopics[(w * 2 + 1) % talkTopics.length],
+      start: sun.add(const Duration(hours: 20)),
+      end: sun.add(const Duration(hours: 20, minutes: 45)),
+      colors: const [Color(0xFF48C6EF), Color(0xFF6F86D6)],
+      style: BackdropStyle.stars,
+      span: 'talk-${dayKey(sun)}',
+      howTo: '20:00〜20:45だけ開く部屋。見るだけでもOK',
+    ),
+  ];
+}
+
+OnlineEvent _festivalEvent(HirobaFestival f, int year) => OnlineEvent(
+      kind: 'fes',
+      emoji: f.emoji,
+      title: f.name,
+      theme: f.prompt,
+      start: f.start(year),
+      end: f.end(year).add(const Duration(seconds: 1)),
+      colors: f.colors,
+      style: f.style,
+      span: '${f.id}-$year',
+      goal: f.goal,
+      howTo: '写真かひとことで参加。みんなで${f.goal}こ集めよう',
+    );
+
+// いま開いているイベント（お祭りがいちばん上）
+List<OnlineEvent> liveOnlineEvents(DateTime now) {
+  final list = <OnlineEvent>[];
+  final f = currentFestival(now);
+  if (f != null) list.add(_festivalEvent(f, now.year));
+  list.addAll(_weekEvents(mondayOf(now)).where((e) => e.isLive(now)));
+  return list;
+}
+
+// これから7日のうちに始まるイベント（始まる順）
+List<OnlineEvent> upcomingOnlineEvents(DateTime now) {
+  final m = mondayOf(now);
+  final all = [..._weekEvents(m), ..._weekEvents(m.add(const Duration(days: 7)))];
+  final limit = now.add(const Duration(days: 7));
+  final list = all.where((e) => e.start.isAfter(now) && e.start.isBefore(limit)).toList()
+    ..sort((a, b) => a.start.compareTo(b.start));
+  final (nf, ny) = nextFestival(now);
+  if (nf.start(ny).isBefore(limit)) list.insert(0, _festivalEvent(nf, ny));
+  return list;
+}
+
+const List<String> weekdayJa = ['月', '火', '水', '木', '金', '土', '日'];
+
+String whenText(DateTime d) =>
+    '${d.month}/${d.day}（${weekdayJa[d.weekday - 1]}）${d.hour == 0 && d.minute == 0 ? '' : ' ${d.hour}:${d.minute.toString().padLeft(2, '0')}'}';
 
 /* ---------------- 期間限定のお祭り ---------------- */
 
@@ -197,6 +347,7 @@ class HirobaFestival {
         span: '$id-$year',
         prompt: prompt,
         starters: starters,
+        allowPhoto: true,
       );
 }
 
@@ -251,8 +402,11 @@ HirobaFestival? currentFestival(DateTime now) {
 
 // ルール・アカウント削除で使う、部屋の名前の一覧
 List<String> get allHirobaRoomIds => [
-      ...hirobaRooms.map((r) => r.id),
-      'topic',
+      ...legacyRoomIds,
+      'photo',
+      'challenge',
+      'talk',
+      ...animalGroups.map((g) => 'ani_${g.key}'),
       ...hirobaFestivals.map((f) => 'fes_${f.id}'),
     ];
 

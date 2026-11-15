@@ -12,6 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_profile_page.dart';
 import 'event_chat_page.dart';
+import 'hiroba_data.dart' show eventAnimalChoices, eventSafetyTags;
 import 'notification_prefs.dart';
 
 const _categories = ['全て', '散歩仲間募集', 'その他'];
@@ -104,10 +105,76 @@ Widget _pill(String text, bool selected, Color color, VoidCallback onTap,
 }
 
 Widget _categoryChips(String selected, ValueChanged<String> onSelect) {
-  return Row(
-    children: ['散歩仲間募集', 'その他']
-        .map((cat) => _pill(cat, selected == cat, _orange, () => onSelect(cat)))
-        .toList(),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: eventCategories
+            .map((cat) => _pill(cat, selected == cat, _orange, () => onSelect(cat)))
+            .toList(),
+      ),
+    ],
+  );
+}
+
+// イベントの種類（犬のおさんぽ会だけにならないように）
+const List<String> eventCategories = ['散歩仲間募集', '同じ動物の会', 'お話し会・勉強会', '譲渡会・保護活動', 'その他'];
+
+// 「どの動物の会」と「安心のしるし」をえらぶ部分（投稿と編集で同じもの）
+Widget _animalAndTags({
+  required String animal,
+  required Set<String> tags,
+  required ValueChanged<String> onAnimal,
+  required ValueChanged<String> onTag,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const SizedBox(height: 16),
+      _label('どの動物の会？'),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: eventAnimalChoices
+            .map((a) => _pill(a, animal == a, _green, () => onAnimal(a)))
+            .toList(),
+      ),
+      const SizedBox(height: 16),
+      _label('安心のしるし（あてはまるものを全部）'),
+      Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: eventSafetyTags
+            .map((t) => _pill(t, tags.contains(t), _orange, () => onTag(t)))
+            .toList(),
+      ),
+      if (animal != '犬' && animal != 'どの動物でも')
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('うさぎ・小鳥・爬虫類などは、移動や温度の変化が負担になりやすいので、「動物はお留守番（人だけ）」の会がおすすめです。',
+              style: TextStyle(fontSize: 11, color: Colors.grey[600], height: 1.4)),
+        ),
+    ],
+  );
+}
+
+// カードや詳しい画面に出す、動物と安心のしるし
+Widget eventTagChips(Map<String, dynamic> event, {double fontSize = 10}) {
+  final animal = event['animal'] as String?;
+  final tags = (event['tags'] as List?)?.whereType<String>().toList() ?? const <String>[];
+  if ((animal == null || animal.isEmpty) && tags.isEmpty) return const SizedBox.shrink();
+  return Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        if (animal != null && animal.isNotEmpty) _badge(animal, _green),
+        ...tags.map((t) => _badge(t, _orange)),
+      ],
+    ),
   );
 }
 
@@ -737,6 +804,8 @@ class _EventPageState extends State<EventPage> {
     required String title,
     required String description,
     required String category,
+    required String animal,
+    required List<String> tags,
     required String date,
     required String location,
     required int? maxParticipants,
@@ -777,6 +846,8 @@ class _EventPageState extends State<EventPage> {
         'title': title,
         'description': description,
         'category': category,
+        'animal': animal,
+        'tags': tags,
         'date': date,
         'location': location,
         'emoji': '🐾',
@@ -811,6 +882,8 @@ class _EventPageState extends State<EventPage> {
     required String location,
     required String date,
     required String category,
+    required String animal,
+    required List<String> tags,
     required DateTime? endDate,
     required int? maxParticipants,
   }) async {
@@ -847,6 +920,8 @@ class _EventPageState extends State<EventPage> {
         'location': location,
         'date': date,
         'category': category,
+        'animal': animal,
+        'tags': tags,
         if (newEnd != null) 'endDate': Timestamp.fromDate(newEnd),
         'maxParticipants': maxParticipants,
       });
@@ -1109,6 +1184,7 @@ class _EventPageState extends State<EventPage> {
                       Text(event['organizerName'] as String? ?? '',
                           style:
                           TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      eventTagChips(event),
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -1628,6 +1704,7 @@ class _EventPageState extends State<EventPage> {
                               Text(event['organizerName'] as String? ?? '',
                                   style: TextStyle(
                                       fontSize: 13, color: Colors.grey[600])),
+                              eventTagChips(event, fontSize: 12),
                             ],
                           ),
                         ),
@@ -1888,6 +1965,8 @@ class _EventPageState extends State<EventPage> {
         text: event['maxParticipants']?.toString() ?? '');
     String dateText = event['date'] as String? ?? '';
     String selectedCategory = event['category'] as String? ?? '散歩仲間募集';
+    String selectedAnimal = (event['animal'] as String?) ?? 'どの動物でも';
+    final selectedTags = <String>{...((event['tags'] as List?)?.whereType<String>() ?? const <String>[])};
     DateTime? selectedEndDate = event['endDate'] is Timestamp
         ? (event['endDate'] as Timestamp).toDate()
         : null;
@@ -1913,6 +1992,13 @@ class _EventPageState extends State<EventPage> {
               _label('カテゴリ'),
               _categoryChips(selectedCategory,
                       (cat) => setModalState(() => selectedCategory = cat)),
+              _animalAndTags(
+                animal: selectedAnimal,
+                tags: selectedTags,
+                onAnimal: (a) => setModalState(() => selectedAnimal = a),
+                onTag: (t) => setModalState(() =>
+                    selectedTags.contains(t) ? selectedTags.remove(t) : selectedTags.add(t)),
+              ),
               const SizedBox(height: 16),
               _label('タイトル'),
               TextField(
@@ -1997,6 +2083,8 @@ class _EventPageState extends State<EventPage> {
                     location: locationCtrl.text,
                     date: dateText,
                     category: selectedCategory,
+                    animal: selectedAnimal,
+                    tags: selectedTags.toList(),
                     endDate: selectedEndDate,
                     maxParticipants: maxParticipantsCtrl.text.isEmpty
                         ? null
@@ -2035,6 +2123,8 @@ class _EventPageState extends State<EventPage> {
     DateTime? selectedDate;
     DateTime? selectedEndDate;
     String selectedCategory = '散歩仲間募集';
+    String selectedAnimal = 'どの動物でも';
+    final selectedTags = <String>{'はじめて歓迎'};
     String? selectedImageUrl;
     bool isUploadingImage = false;
     bool isPosting = false;
@@ -2057,6 +2147,13 @@ class _EventPageState extends State<EventPage> {
               _label('カテゴリ'),
               _categoryChips(selectedCategory,
                       (cat) => setModalState(() => selectedCategory = cat)),
+              _animalAndTags(
+                animal: selectedAnimal,
+                tags: selectedTags,
+                onAnimal: (a) => setModalState(() => selectedAnimal = a),
+                onTag: (t) => setModalState(() =>
+                    selectedTags.contains(t) ? selectedTags.remove(t) : selectedTags.add(t)),
+              ),
               const SizedBox(height: 16),
               _label('画像（任意）'),
               GestureDetector(
@@ -2197,6 +2294,8 @@ class _EventPageState extends State<EventPage> {
                     title: title,
                     description: descCtrl.text,
                     category: selectedCategory,
+                    animal: selectedAnimal,
+                    tags: selectedTags.toList(),
                     date: dateText,
                     location: locationCtrl.text,
                     maxParticipants: maxParticipantsCtrl.text.isEmpty
