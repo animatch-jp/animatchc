@@ -9,6 +9,8 @@ import '../services/age_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'question_board_page.dart';
 import 'event_chat_page.dart';
+import 'hiroba_data.dart';
+import 'hiroba_room_page.dart';
 import 'pet_brag_page.dart' show showPostDetail;
 import 'user_profile_page.dart';
 
@@ -32,7 +34,8 @@ String? reportedContentPath(dynamic comment) {
   final allowed = RegExp('^questions/$id(/answers/$id)?\$').hasMatch(path) ||
       RegExp('^events/$id/messages/$id\$').hasMatch(path) ||
       RegExp('^petBrags/$id/comments/$id\$').hasMatch(path) ||
-      RegExp('^orgPosts/$id\$').hasMatch(path);
+      RegExp('^orgPosts/$id\$').hasMatch(path) ||
+      RegExp('^hiroba/$id/hirobaPosts/$id\$').hasMatch(path);
   return allowed ? path : null;
 }
 
@@ -267,10 +270,23 @@ class ReportedContentCard extends StatelessWidget {
   const ReportedContentCard({super.key, required this.path, this.reportId});
 
   bool get _isMessage => path.startsWith('events/');
+  bool get _isHiroba => path.startsWith('hiroba/');
   bool get _isPetComment => path.startsWith('petBrags/');
   String get _firstId => path.split('/')[1];
 
   Future<void> _open(BuildContext context) async {
+    if (_isHiroba) {
+      final roomId = _firstId;
+      final room = hirobaRooms.where((r) => r.id == roomId).firstOrNull;
+      if (room == null) {
+        // お題・お祭りの部屋は日によって中身がかわるので、中身はこのカードで確かめる
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('お題・お祭りの部屋の投稿です。中身は上の文で確かめてください')));
+        return;
+      }
+      Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: room)));
+      return;
+    }
     if (_isPetComment) {
       showPostDetail(context, _firstId);
       return;

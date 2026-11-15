@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_page.dart';
+import 'hiroba_data.dart' show allHirobaRoomIds;
 
 class DeleteAccountPage extends StatefulWidget {
   const DeleteAccountPage({super.key});
@@ -112,6 +113,16 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
             () => _deleteAll(_db.collection('lostPets').where('uid', isEqualTo: uid)));
     await _safe('questions',
             () => _deleteAll(_db.collection('questions').where('uid', isEqualTo: uid)));
+    // ひろばの投稿（部屋ごとに、自分の分だけ）
+    await _safe('hiroba', () async {
+      for (final room in allHirobaRoomIds) {
+        await _deleteAll(_db
+            .collection('hiroba')
+            .doc(room)
+            .collection('hirobaPosts')
+            .where('uid', isEqualTo: uid));
+      }
+    });
 
     // チャット（メッセージも一緒に）
     await _safe('chats', () async {
