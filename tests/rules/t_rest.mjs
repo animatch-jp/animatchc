@@ -1,0 +1,72 @@
+import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
+import { readFileSync } from 'fs';
+import { doc, setDoc, getDoc, updateDoc, addDoc, collection, Timestamp, serverTimestamp, arrayUnion, arrayRemove, FieldPath, deleteField } from 'firebase/firestore';
+const env = await initializeTestEnvironment({ projectId: 'demo-am', firestore: { rules: readFileSync('firestore.rules','utf8'), host:'127.0.0.1', port:8080 }});
+await env.clearFirestore();
+const db = u => env.authenticatedContext(u).firestore();
+let ok=0, ng=0; const t = async (name, pr, expectOk) => { try { await (expectOk?assertSucceeds:assertFails)(pr); ok++; console.log('OK ', name);} catch(e){ ng++; console.log('NG ', name, e.message.slice(0,200));} };
+await env.withSecurityRulesDisabled(async c => { const f=c.firestore();
+  for (const [u,n] of [['A','みけ'],['B','ぽち'],['C','たま']]) {
+    await setDoc(doc(f,'users',u), {name:n});
+    await setDoc(doc(f,`users/${u}/private/birth`), {birthDate: '1990-01-01'});
+  }
+  await setDoc(doc(f,'events/ev1'), {organizerUid:'A', organizerName:'みけ', title:'t', participantCount:2});
+  await setDoc(doc(f,'events/ev1/participants/B'), {uid:'B'});
+  await setDoc(doc(f,'events/ev1/participants/C'), {uid:'C'});
+  await setDoc(doc(f,'events/ev1/messages/m1'), {text:'こんにちは', senderUid:'B', senderName:'ぽち', reactions:{paw:['C']}});
+  await setDoc(doc(f,'events/ev1/messages/p1'), {type:'poll', question:'q', options:['a','b'], text:'🗳 投票：q', senderUid:'A', senderName:'みけ', reactions:{opt0:['C']}});
+  await setDoc(doc(f,'likes/A/liked/x'), {v:1});
+  await setDoc(doc(f,'favorites/A/favorited/x'), {v:1});
+  await setDoc(doc(f,'petBrags/pb1'), {uid:'A'});
+  await setDoc(doc(f,'questions/q1'), {uid:'A', name:'みけ', title:'t', body:'b'});
+});
+// likes / favorites
+await t('いいね：本人は読める', getDoc(doc(db('A'),'likes/A/liked/x')), true);
+await t('いいね：ほかの人は読めない', getDoc(doc(db('B'),'likes/A/liked/x')), false);
+await t('お気に入り：ほかの人は読めない', getDoc(doc(db('B'),'favorites/A/favorited/x')), false);
+// pets
+await t('ペット：ふつうに登録', setDoc(doc(db('A'),'users/A/pets/p1'), {name:'こむぎ', type:'犬', age:'2歳', bio:'よろしく', tags:['甘えん坊'], imageUrl:''}), true);
+await t('ペット：21字の名前', setDoc(doc(db('A'),'users/A/pets/p2'), {name:'あ'.repeat(21)}), false);
+await t('ペット：301字の紹介に書きかえ', updateDoc(doc(db('A'),'users/A/pets/p1'), {bio:'あ'.repeat(301)}), false);
+await t('ペット：ほかの人は書けない', setDoc(doc(db('B'),'users/A/pets/p3'), {name:'x'}), false);
+// event messages
+const msgs = u => collection(db(u),'events/ev1/messages');
+await t('チャット：ふつうに送る', addDoc(msgs('B'), {text:'やあ', senderUid:'B', senderName:'ぽち', senderImageUrl:'', createdAt: serverTimestamp()}), true);
+await t('チャット：名前が空でも送れる', addDoc(msgs('B'), {text:'やあ', senderUid:'B', senderName:'', createdAt: serverTimestamp()}), true);
+await t('チャット：主催者も送れる', addDoc(msgs('A'), {text:'やあ', senderUid:'A', senderName:'みけ'}), true);
+await t('チャット：ほかの人の名前で送る', addDoc(msgs('B'), {text:'やあ', senderUid:'B', senderName:'みけ'}), false);
+await t('チャット：投票を作る', addDoc(msgs('B'), {type:'poll', question:'q', options:['a','b','c','d'], text:'🗳 投票：q', senderUid:'B', senderName:'ぽち'}), true);
+await t('チャット：選択肢5つ', addDoc(msgs('B'), {type:'poll', question:'q', options:['a','b','c','d','e'], text:'q', senderUid:'B', senderName:'ぽち'}), false);
+await t('チャット：最初から票を入れて作る', addDoc(msgs('B'), {type:'poll', question:'q', options:['a','b'], text:'q', senderUid:'B', senderName:'ぽち', reactions:{opt0:['A','C']}}), false);
+await t('お知らせ：参加しました（本物）', addDoc(msgs('B'), {text:'ぽちさんが参加しました🐾', senderUid:'system', senderName:'システム', senderImageUrl:'', isSystem:true, createdAt: serverTimestamp()}), true);
+await t('お知らせ：好きな文', addDoc(msgs('B'), {text:'運営からのお知らせ：このURLを開いて', senderUid:'system', senderName:'システム', isSystem:true}), false);
+await t('お知らせ：ほかの人の名前で参加', addDoc(msgs('B'), {text:'みけさんが参加しました🐾', senderUid:'system', senderName:'システム', isSystem:true}), false);
+await t('お知らせ：自分のuidで isSystem', addDoc(msgs('B'), {text:'x', senderUid:'B', senderName:'ぽち', isSystem:true}), false);
+await t('自分のメッセージを直す', updateDoc(doc(db('B'),'events/ev1/messages/m1'), {text:'こんばんは'}), true);
+await t('自分のメッセージをお知らせに変える', updateDoc(doc(db('B'),'events/ev1/messages/m1'), {isSystem:true}), false);
+await t('自分のメッセージの名前を変える', updateDoc(doc(db('B'),'events/ev1/messages/m1'), {senderName:'みけ'}), false);
+await t('自分のメッセージの票を書きかえる', updateDoc(doc(db('B'),'events/ev1/messages/m1'), {reactions:{paw:[]}}), false);
+await t('リアクション：自分を足す', updateDoc(doc(db('A'),'events/ev1/messages/m1'), new FieldPath('reactions','love'), arrayUnion('A')), true);
+await t('リアクション：自分を外す', updateDoc(doc(db('A'),'events/ev1/messages/m1'), new FieldPath('reactions','love'), arrayRemove('A')), true);
+await t('リアクション：ほかの人の分を消す', updateDoc(doc(db('A'),'events/ev1/messages/m1'), new FieldPath('reactions','paw'), arrayRemove('C')), false);
+await t('リアクション：ほかの人の分を足す', updateDoc(doc(db('A'),'events/ev1/messages/m1'), new FieldPath('reactions','good'), arrayUnion('Z')), false);
+await t('リアクション：知らない種類', updateDoc(doc(db('A'),'events/ev1/messages/m1'), new FieldPath('reactions','evil'), arrayUnion('A')), false);
+await t('投票：自分の票（アプリと同じ）', updateDoc(doc(db('B'),'events/ev1/messages/p1'), new FieldPath('reactions','opt0'), arrayRemove('B'), new FieldPath('reactions','opt1'), arrayUnion('B')), true);
+await t('投票：ほかの人の票を消す', updateDoc(doc(db('B'),'events/ev1/messages/p1'), new FieldPath('reactions','opt0'), arrayRemove('C')), false);
+await t('投票：ほかの人の票を動かす', updateDoc(doc(db('B'),'events/ev1/messages/p1'), new FieldPath('reactions','opt0'), arrayRemove('C'), new FieldPath('reactions','opt1'), arrayUnion('C')), false);
+await t('投票：参加していない人', updateDoc(doc(db('Z'),'events/ev1/messages/p1'), new FieldPath('reactions','opt1'), arrayUnion('Z')), false);
+// names
+await t('ペット自慢コメント：本当の名前', setDoc(doc(db('B'),'petBrags/pb1/comments/c1'), {uid:'B', name:'ぽち', text:'かわいい'}), true);
+await t('ペット自慢コメント：ほかの人の名前', setDoc(doc(db('B'),'petBrags/pb1/comments/c2'), {uid:'B', name:'AniMatch運営', text:'x'}), false);
+await t('質問：本当の名前', setDoc(doc(db('B'),'questions/q2'), {uid:'B', name:'ぽち', title:'t', body:'b'}), true);
+await t('質問：ほかの人の名前', setDoc(doc(db('B'),'questions/q3'), {uid:'B', name:'みけ', title:'t', body:'b'}), false);
+await t('質問：あとで名前を変える', updateDoc(doc(db('A'),'questions/q1'), {name:'運営'}), false);
+await t('質問：本文を直す', updateDoc(doc(db('A'),'questions/q1'), {body:'b2'}), true);
+await t('回答：本当の名前', setDoc(doc(db('B'),'questions/q1/answers/a1'), {uid:'B', name:'ぽち', text:'こたえ', helpfulBy:[]}), true);
+await t('回答：ほかの人の名前', setDoc(doc(db('B'),'questions/q1/answers/a2'), {uid:'B', name:'みけ', text:'x', helpfulBy:[]}), false);
+await t('イベント：本当の名前で作る', setDoc(doc(db('B'),'events/ev2'), {organizerUid:'B', organizerName:'ぽち', title:'t', isOfficial:false, participantCount:0}), true);
+await t('イベント：ほかの人の名前で作る', setDoc(doc(db('B'),'events/ev3'), {organizerUid:'B', organizerName:'AniMatch運営', title:'t', isOfficial:false, participantCount:0}), false);
+await t('イベント：あとで名前を変える', updateDoc(doc(db('A'),'events/ev1'), {organizerName:'運営'}), false);
+await t('イベント：題名を直す', updateDoc(doc(db('A'),'events/ev1'), {title:'t2'}), true);
+console.log(`合計 OK ${ok} / NG ${ng}`);
+await env.cleanup(); process.exit(ng?1:0);

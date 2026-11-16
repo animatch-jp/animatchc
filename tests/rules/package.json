@@ -1,0 +1,18 @@
+{
+  "name": "animatch-rules-tests",
+  "version": "1.0.0",
+  "description": "Firestoreのルールのテスト（エミュレーター）",
+  "main": "index.js",
+  "scripts": {
+    "test": "node t_hiroba.mjs && node t_rest.mjs && node t_block.mjs && node t_notif.mjs && node t_evblock.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.35.0"
+  },
+  "private": true
+}

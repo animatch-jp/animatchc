@@ -4,3 +4,6 @@
 .idea/
 *.iml
 out/
+tests/rules/node_modules/
+tests/rules/firestore.rules
+*-debug.log

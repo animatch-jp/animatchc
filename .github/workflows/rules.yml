@@ -1,0 +1,65 @@
+# Firestoreのルールを、テストしてから自動で公開する
+# ・firestore.rules かルールのテストを main に保存したときに動く（手で動かすこともできる）
+# ・テストに1つでも落ちたら、公開しない
+# ・公開には、GitHubの「秘密の置き場所」にある FIREBASE_RULES_KEY（ルールの公開しかできないカギ）を使う
+#   カギがまだないときは、テストだけして公開はしない
+name: ルールのテストと公開
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - tests/rules/**
+      - .github/workflows/rules.yml
+  workflow_dispatch:
+
+concurrency:
+  group: rules
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: テストの道具を入れる
+        working-directory: tests/rules
+        run: npm ci
+
+      - name: ルールのテスト（エミュレーター）
+        working-directory: tests/rules
+        run: |
+          cp ../../firestore.rules .
+          npx firebase emulators:exec --only firestore --project demo-am "npm test"
+
+      - name: ルールを公開する
+        if: github.ref == 'refs/heads/main'
+        working-directory: tests/rules
+        env:
+          KEY: ${{ secrets.FIREBASE_RULES_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::notice::カギ（FIREBASE_RULES_KEY）がまだないので、公開はしませんでした。テストは通りました。"
+            exit 0
+          fi
+          printf '%s' "$KEY" > "$RUNNER_TEMP/key.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/key.json"
+          cd ../..
+          tests/rules/node_modules/.bin/firebase deploy --only firestore:rules --project animatch-9d840 --non-interactive
+          rm -f "$RUNNER_TEMP/key.json"
+          echo "::notice::ルールを公開しました（$(git rev-parse --short HEAD)）"
