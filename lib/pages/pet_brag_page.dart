@@ -1,3 +1,5 @@
+import 'event_hub_page.dart' show TodayFlyer;
+import 'hiroba_data.dart' show liveOnlineEvents, upcomingOnlineEvents;
 import 'dart:math' as math;
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
@@ -1317,12 +1319,26 @@ class _RecommendedListState extends State<_RecommendedList> {
             ),
           );
         }
+        // ホームの投稿の流れに、ときどきイベントの貼り紙をまぜる（4つめと、そのあと6つごと）
+        final now = DateTime.now();
+        final eventsToMix = [...liveOnlineEvents(now), ...upcomingOnlineEvents(now).take(2)];
+        final slots = eventsToMix.isEmpty || orderedDocs.length < 3 ? 0 : ((orderedDocs.length - 3) ~/ 6) + 1;
+        bool isSlot(int r) => slots > 0 && r >= 3 && (r - 3) % 7 == 0 && (r - 3) ~/ 7 < slots;
+        int postIndex(int r) => r < 3 ? r : r - (((r - 3) ~/ 7) + 1);
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: orderedDocs.length,
-          itemBuilder: (_, i) {
+          itemCount: orderedDocs.length + slots,
+          itemBuilder: (_, rawI) {
+            if (isSlot(rawI)) {
+              final e = eventsToMix[((rawI - 3) ~/ 7) % eventsToMix.length];
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(6, 10, 6, 26),
+                child: TodayFlyer(event: e, now: now, compact: true),
+              );
+            }
+            final i = postIndex(rawI);
             final data = orderedDocs[i].data() as Map<String, dynamic>;
             final postId = orderedDocs[i].id;
             final votes = data['votes'] as Map<String, dynamic>? ?? {};
