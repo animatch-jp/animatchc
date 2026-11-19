@@ -58,8 +58,12 @@ class UnreadService {
   /// グループ一覧の最初の読み込みが終わったか
   final ValueNotifier<bool> groupsLoaded = ValueNotifier<bool>(false);
 
+  /// 参加中のイベントを読めなかったときの理由（画面に小さく出す）。読めたら null
+  String? lastError;
+
   bool _inited = false;
   String? _uid;
+  int _loadSeq = 0; // 参加中のイベントを読み直すたびに増やす
   int _epoch = 0; // ユーザーが切り替わるたびに増やす（古い結果を捨てるため）
   int _chatSeq = 0;
   Future<void>? _refreshing;
@@ -204,10 +208,18 @@ class UnreadService {
   }
 
   /// 参加中のイベントを調べ直す。チャットタブを開いたときなどに呼ぶ。
-  Future<void> refreshMembership() {
+  Future<void> refreshMembership({bool force = false}) {
     final running = _refreshing;
-    if (running != null) return running;
-    final f = _loadMembership().whenComplete(() => _refreshing = null);
+    if (running != null && !force) return running;
+    if (force) {
+      _loadSeq++; // 前の読みこみの結果は使わない
+      lastError = null;
+      groupsLoaded.value = false;
+    }
+    late final Future<void> f;
+    f = _loadMembership().whenComplete(() {
+      if (identical(_refreshing, f)) _refreshing = null;
+    });
     _refreshing = f;
     return f;
   }
@@ -219,14 +231,17 @@ class UnreadService {
       return;
     }
     final epoch = _epoch;
+    final seq = ++_loadSeq;
     try {
       // 全部のイベントを読むと重いので（バグ9）、読むのは
       // 「まだ終わっていないイベント」と「自分が企画したイベント」だけにする
       final col = FirebaseFirestore.instance.collection('events');
+      // 返事が来ないまま待ち続けて、チャットの画面がずっとクルクルしないように時間を区切る
+      const limit = Duration(seconds: 10);
       final results = await Future.wait([
         col.where('endDate', isGreaterThan: Timestamp.now()).get(),
         col.where('organizerUid', isEqualTo: uid).get(),
-      ]);
+      ]).timeout(limit);
       final byId = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
       for (final r in results) {
         for (final d in r.docs) {
@@ -238,10 +253,18 @@ class UnreadService {
         // 終わったイベントのチャットは、一覧に出さない（イベントの一覧と同じ）
         if (!_isOpenFor(d.data(), uid)) return false;
         if (d.data()['organizerUid'] == uid) return true;
-        final p = await d.reference.collection('participants').doc(uid).get();
-        return p.exists;
+        try {
+          final p = await d.reference
+              .collection('participants')
+              .doc(uid)
+              .get()
+              .timeout(const Duration(seconds: 8));
+          return p.exists;
+        } catch (_) {
+          return false; // 1つ読めなくても、ほかのイベントは出す
+        }
       }));
-      if (epoch != _epoch) return;
+      if (epoch != _epoch || seq != _loadSeq) return;
 
       final joined = <String>{};
       _eventMeta.clear();
@@ -269,10 +292,14 @@ class UnreadService {
       }
 
       _recomputeGroups();
+      lastError = null;
       groupsLoaded.value = true;
     } catch (e) {
       debugPrint('UnreadService.loadMembership エラー: $e');
-      if (epoch == _epoch) groupsLoaded.value = true;
+      if (epoch == _epoch && seq == _loadSeq) {
+        lastError = e is TimeoutException ? '時間切れ' : e.toString().split('\n').first;
+        groupsLoaded.value = true;
+      }
     }
   }
 

@@ -33,6 +33,29 @@ class _ChatListPageState extends State<ChatListPage>
   bool _orgLoaded = false;
   bool _hasError = false;
   int _gen = 0;
+  // 読みこみが長すぎるとき（ずっとクルクルしないように）
+  bool _slow = false;
+  Timer? _slowTimer;
+
+  void _startSlowTimer() {
+    _slowTimer?.cancel();
+    _slow = false;
+    _slowTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) setState(() => _slow = true);
+    });
+  }
+
+  void _retry() {
+    _chatSub?.cancel();
+    _gen++;
+    setState(() {
+      _orgLoaded = false;
+      _hasError = false;
+    });
+    _startSlowTimer();
+    _listenOrgChats();
+    UnreadService.instance.refreshMembership(force: true);
+  }
 
   String? get _myUid => FirebaseAuth.instance.currentUser?.uid;
 
@@ -41,6 +64,7 @@ class _ChatListPageState extends State<ChatListPage>
     super.initState();
     TabReselect.tabs[3].addListener(_toTop);
     _tabCtrl = TabController(length: 2, vsync: this);
+    _startSlowTimer();
     _listenOrgChats();
     // グループ（イベント）の一覧と未読は、共通部品が数えている
     UnreadService.instance.init();
@@ -53,6 +77,7 @@ class _ChatListPageState extends State<ChatListPage>
     _orgScroll.dispose();
     _groupScroll.dispose();
     _chatSub?.cancel();
+    _slowTimer?.cancel();
     _tabCtrl.dispose();
     super.dispose();
   }
@@ -98,7 +123,8 @@ class _ChatListPageState extends State<ChatListPage>
           final orgDoc = await FirebaseFirestore.instance
               .collection('organizations')
               .doc(otherUid)
-              .get();
+              .get()
+              .timeout(const Duration(seconds: 8));
           _orgCache[otherUid] = orgDoc.exists ? (orgDoc.data() ?? {}) : null;
         }
         final org = _orgCache[otherUid];
@@ -120,7 +146,8 @@ class _ChatListPageState extends State<ChatListPage>
                 .collection('messages')
                 .orderBy('createdAt', descending: true)
                 .limit(1)
-                .get();
+                .get()
+                .timeout(const Duration(seconds: 8));
             cached = {};
             if (last.docs.isNotEmpty) {
               final m = last.docs.first.data();
@@ -378,12 +405,48 @@ class _ChatListPageState extends State<ChatListPage>
     );
   }
 
+  /// 読みこみ中のクルクル。10秒たっても終わらないときは、もう一度ためすボタンを出す
+  Widget _loadingView(String? detail) {
+    if (!_slow) {
+      return const Center(
+          child: CircularProgressIndicator(color: Color(0xFFE8845A)));
+    }
+    return _retryView('読みこみに時間がかかっています', detail);
+  }
+
+  Widget _retryView(String message, String? detail) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(message,
+                style: const TextStyle(color: Colors.grey, fontSize: 15)),
+            if (detail != null && detail.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(detail,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+            ],
+            const SizedBox(height: 14),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFE8845A)),
+              onPressed: _retry,
+              child: const Text('もう一度読みこむ'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildOrgTab() {
     if (_hasError) {
-      return const Center(
-          child:
-          Text('読み込めませんでした', style: TextStyle(color: Colors.grey)));
+      return _retryView('読み込めませんでした', null);
     }
+    if (!_orgLoaded) return _loadingView(null);
     if (_orgChats.isEmpty) {
       return const Center(
         child: Column(
@@ -406,6 +469,11 @@ class _ChatListPageState extends State<ChatListPage>
   }
 
   Widget _buildEventTab(List<GroupChatSummary> groups) {
+    final svc = UnreadService.instance;
+    if (!svc.groupsLoaded.value) return _loadingView(svc.lastError);
+    if (groups.isEmpty && svc.lastError != null) {
+      return _retryView('読み込めませんでした', svc.lastError);
+    }
     if (groups.isEmpty) {
       return const Center(
         child: Column(
@@ -483,14 +551,8 @@ class _ChatListPageState extends State<ChatListPage>
     return ListenableBuilder(
       listenable: Listenable.merge([svc.groups, svc.groupsLoaded]),
       builder: (context, _) {
-        if (!_orgLoaded || !svc.groupsLoaded.value) {
-          return const Scaffold(
-            backgroundColor: Color(0xFFFFF5F3),
-            body: Center(
-                child: CircularProgressIndicator(color: Color(0xFFE8845A))),
-          );
-        }
-
+        // 前は、団体とグループの両方が読み終わるまで画面全体がクルクルしていた。
+        // いまは画面をすぐ出して、読みこみ中のタブだけクルクルする
         final groups = svc.groups.value;
         final orgUnread =
         _orgChats.fold<int>(0, (sum, c) => sum + (c['unread'] as int));
