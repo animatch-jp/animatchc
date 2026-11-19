@@ -1,11 +1,11 @@
 {
-    "name": "animatch_app",
-    "short_name": "animatch_app",
+    "name": "AniMatch",
+    "short_name": "AniMatch",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFF8F5",
+    "theme_color": "#E8845A",
+    "description": "動物好きのコミュニティアプリ",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
@@ -31,5 +31,6 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "lang": "ja"
 }
