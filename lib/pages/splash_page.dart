@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'first_steps.dart';
 import '../widgets/animaru.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'login_page.dart';
 import 'root_page.dart';
 import 'profile_setup_page.dart';
 import 'organization_home_page.dart';
@@ -80,7 +80,7 @@ class _SplashPageState extends State<SplashPage>
     }
     if (!mounted) return;
     if (user == null) {
-      setState(() => _next = const LoginPage());
+      setState(() => _next = const FirstLookPage());
       return;
     }
 

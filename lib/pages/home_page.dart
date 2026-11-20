@@ -2,6 +2,7 @@ import 'profile_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'first_steps.dart' show NewFacesRow;
 import '../services/blocked_users.dart';
 import 'pet_brag_page.dart';
 import 'ranking_page.dart';
@@ -157,6 +158,7 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                   KeyedSubtree(key: _guideKey, child: const _StartGuideCard()),
+                  const NewFacesRow(),
                   const _CareReminderCard(),
                   const _PetTaskReminder(),
                   const _MemoryCard(),

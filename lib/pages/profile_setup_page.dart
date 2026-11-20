@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'first_steps.dart' show FirstSteps;
 import '../widgets/animaru_loading.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru.dart';
@@ -20,7 +21,8 @@ class ProfileSetupPage extends StatefulWidget {
 class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _nameCtrl = TextEditingController();
   DateTime? _birthDate;
-  final List<String> _selectedAnimals = [];
+  // 入口でえらんだ好きな動物を、最初からえらんだ状態にする
+  final List<String> _selectedAnimals = [...FirstSteps.pickedAnimals];
 
   // あにまるのふきだしと気持ち
   String _guideMsg = 'きみのことを教えてね。\n写真とニックネームから！';

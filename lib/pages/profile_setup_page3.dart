@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'first_steps.dart';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
 import '../widgets/signup_decor.dart';
 import '../widgets/animaru_guide.dart';
-import 'welcome_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/cloudinary_service.dart';
@@ -43,7 +43,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
   void _skip() {
     Navigator.pushAndRemoveUntil(
       context,
-      signupRoute(const WelcomePage()),
+      signupRoute(const FirstPhotoPage()),
           (route) => false,
     );
   }
@@ -97,7 +97,7 @@ class _ProfileSetupPage3State extends State<ProfileSetupPage3> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        signupRoute(WelcomePage(petCount: _pets.length)),
+        signupRoute(FirstPhotoPage(petCount: _pets.length)),
             (route) => false,
       );
     } catch (e) {

@@ -74,14 +74,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
 
   void _saveProfile() async {
     if (ContentFilter.blocked(context, [_bioCtrl.text, _mottoCtrl.text])) return;
-    if (_selectedRelation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('動物との関わり方を選択してください'),
-            backgroundColor: Colors.red),
-      );
-      return;
-    }
+    // 動物との関わり方は、えらばなくても進める（はじめての5分を短くする。あとでマイページから書ける）
 
     setState(() => _isLoading = true);
 
@@ -102,7 +95,7 @@ class _ProfileSetupPage2State extends State<ProfileSetupPage2> {
           'animal': widget.animal,
           'bio': _bioCtrl.text.trim(),
           'motto': _mottoCtrl.text.trim(),
-          'relation': _selectedRelation,
+          'relation': _selectedRelation ?? '',
           'interests': _selectedInterests,
           'spots': _selectedSpots,
           'uid': user.uid,
