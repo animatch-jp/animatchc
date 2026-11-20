@@ -679,7 +679,10 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    _hideName ? '名前を出さずに「$hiddenName」として書く' : '名前を出さずに書く',
+                    // コード点検 11/16：アプリを改造すれば、だれが書いたかは分かってしまう。正直に書く
+                    _hideName
+                        ? '画面では「$hiddenName」と出ます（運営には分かります）'
+                        : '名前を出さずに書く',
                     style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                   ),
                 ]),
