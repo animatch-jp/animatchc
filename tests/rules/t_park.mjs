@@ -27,6 +27,12 @@ await t('日付の形でない場所には作れない', setDoc(p('D','D','himit
 await t('自分の名札のリボンを変えられる', setDoc(p('A'), tag({ribbon:'slow'})), true);
 await t('ほかの人の名札は書きかえられない', updateDoc(p('A','B'), {ribbon:'look', updatedAt: serverTimestamp()}), false);
 await t('ログインした人は読める', getDoc(p('A','B')), true);
+await t('公園の中で歩ける（位置を書ける）', setDoc(p('A'), {x:0.4, y:0.7, updatedAt: serverTimestamp()}, {merge:true}), true);
+await t('公園の外には出られない', setDoc(p('A'), {x:1.5, updatedAt: serverTimestamp()}, {merge:true}), false);
+await t('決まったことばのふきだしを出せる', setDoc(p('A'), {say:'いい天気だね', sayAt: serverTimestamp(), updatedAt: serverTimestamp()}, {merge:true}), true);
+await t('歩いても前のふきだしの時刻はそのまま', setDoc(p('A'), {x:0.5, updatedAt: serverTimestamp()}, {merge:true}), true);
+await t('決まっていないことばは出せない', setDoc(p('A'), {say:'LINE教えて', sayAt: serverTimestamp(), updatedAt: serverTimestamp()}, {merge:true}), false);
+await t('ふきだしの時刻を偽れない', setDoc(p('A'), {say:'かわいいね', sayAt: Timestamp.fromDate(new Date(2030,1,1)), updatedAt: serverTimestamp()}, {merge:true}), false);
 await t('ログインしていない人は読めない', getDoc(doc(anon,'park/2026-11-20/visitors/B')), false);
 await t('ほかの人の名札は消せない', deleteDoc(p('A','B')), false);
 await t('運営は消せる', deleteDoc(p('Z','B')), true);
