@@ -629,7 +629,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
       top: s.y * _size.height - 52,
       width: 100,
       child: GestureDetector(
-        onTap: () => _walkTo(s.x, s.y + .07, goal: s.key),
+        onTap: () => _walkTo(s.x + (s.x < .4 ? .16 : s.x > .6 ? -.16 : 0), s.y + (s.x >= .4 && s.x <= .6 ? .1 : .02), goal: s.key),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           SizedBox(
             height: 18,
@@ -651,7 +651,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
               height: 14,
               margin: const EdgeInsets.only(bottom: 2),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: .25),
+                color: Colors.black.withValues(alpha: .16),
                 borderRadius: BorderRadius.circular(30),
               ),
             ),
