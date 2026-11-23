@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'dart:ui';
+import 'pages/animal_park.dart';
 import 'pages/splash_page.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -68,6 +69,10 @@ void main() async {
   runApp(const MyApp());
 }
 
+// テスト用のページだけで使える、公園のお試し表示（?preview=park / ?preview=areas）
+final String? _preview =
+    kIsWeb && parkPreviewAllowed ? Uri.base.queryParameters['preview'] : null;
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -96,7 +101,11 @@ class MyApp extends StatelessWidget {
           },
         ),
       ),
-      home: const SplashPage(),
+      home: _preview == 'park'
+          ? const AnimalParkPage(preview: true)
+          : _preview == 'areas'
+              ? const AnimalAreasPage(preview: true)
+              : const SplashPage(),
     );
   }
 }

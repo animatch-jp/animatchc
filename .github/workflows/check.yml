@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter build web --release --base-href /animatchc/ > build.txt 2>&1
+          flutter build web --release --base-href /animatchc/ --dart-define=PARK_PREVIEW=true > build.txt 2>&1
           code=$?
           cat build.txt
           if [ $code -ne 0 ]; then
