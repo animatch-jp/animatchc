@@ -619,99 +619,172 @@ class _AnimalGroupPageState extends State<AnimalGroupPage> {
     if (mounted) setState(() {});
   }
 
+  // その動物の場所の写真（Unsplash）。公園の「〇〇の芝」などと同じ場所
+  static const _photos = {
+    'dog': ('photo-1704895598909-dd19e72fc3ae', 'Léa Journiac'),
+    'cat': ('photo-1574158622682-e40e69881006', 'Cédric VT'),
+    'rabbit': ('photo-1630535590772-ed554b4f4096', 'Jacob Amson'),
+    'bird': ('photo-1594911588637-c9e891bd7858', 'Tawhid Khan'),
+    'small': ('photo-1721327900411-b315dce4388e', 'Zhaoli JIN'),
+    'reptile': ('photo-1633767319476-d43c16b828c4', 'Andrey Tikhonovskiy'),
+    'other': ('photo-1625369708811-65ebfc5ca632', 'SLNC'),
+  };
+  static const _places = {
+    'dog': 'ドッグラン',
+    'cat': 'ねこの日だまり',
+    'rabbit': 'うさぎの芝',
+    'bird': '小鳥の木かげ',
+    'small': '小さな広場',
+    'ferret': 'トンネル広場',
+    'reptile': '温室テント',
+    'other': '水辺',
+  };
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    final photo = _photos[g.key] ?? ('photo-1759750909584-b96825e93de8', 'Maxim Nikiforov');
+    final place = _places[g.key] ?? '${g.name}の場所';
+    const ink = Color(0xFF2B2622);
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F0),
-      appBar: AppBar(
-        foregroundColor: Colors.white,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: FestiveBackdrop(colors: g.colors, style: BackdropStyle.stars, seed: g.key.hashCode),
-        title: Text('${g.emoji} ${g.name}の集まり',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-      ),
+      backgroundColor: const Color(0xFFFFFAF4),
       body: RefreshIndicator(
         onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.all(14), children: [
-          Pressable(
-            onTap: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: g.room)));
-              _load();
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: g.colors),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(children: [
-                Text(g.emoji, style: const TextStyle(fontSize: 36)),
-                const SizedBox(width: 12),
-                Expanded(
+        child: CustomScrollView(slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 230,
+            foregroundColor: Colors.white,
+            backgroundColor: const Color(0xFF5E7F4F),
+            title: Text(place, style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white)),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(fit: StackFit.expand, children: [
+                Image.network(
+                  'https://images.unsplash.com/${photo.$1}?auto=format&fit=crop&w=1200&q=70',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) => Container(color: const Color(0xFF6FA35A)),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x66000000), Color(0x00000000), Color(0x99000000)],
+                      stops: [0, .45, 1],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: 16,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${g.name}の部屋',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+                    Text('${g.emoji} ${g.name}の子たちの場所',
+                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 2),
                     Text(
                         _today == null
-                            ? 'いつでも開いています'
-                            : (_today == 0 ? '今日はまだ静か。いちばん乗りのチャンス' : '今日 $_today件の投稿'),
-                        style: const TextStyle(color: Colors.white, fontSize: 12)),
-                    const Text('写真・ひとこと・スタンプで。見るだけでもOK',
-                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                            ? 'どうぶつ公園の中にあります'
+                            : (_today == 0 ? '今日はまだ静か。いちばん乗りのチャンス' : '今日 $_today件の投稿があります'),
+                        style: const TextStyle(color: Colors.white, fontSize: 13)),
                   ]),
                 ),
-                const Icon(Icons.chevron_right, color: Colors.white),
+                Positioned(
+                  right: 8,
+                  top: 0,
+                  child: SafeArea(
+                    child: Text('写真：${photo.$2} / Unsplash',
+                        style: const TextStyle(color: Colors.white70, fontSize: 9)),
+                  ),
+                ),
               ]),
             ),
           ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: g.colors.first.withValues(alpha: 0.5)),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                Pressable(
+                  onTap: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: g.room)));
+                    _load();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 14, offset: Offset(0, 4))],
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(color: Color(0xFFFFEFE6), shape: BoxShape.circle),
+                        child: const Text('💬', style: TextStyle(fontSize: 26)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${g.name}の部屋で話す',
+                              style: const TextStyle(color: ink, fontWeight: FontWeight.w900, fontSize: 16)),
+                          const SizedBox(height: 2),
+                          Text('写真・ひとこと・スタンプで。見るだけでもOK',
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                        ]),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, color: _orange),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6E9),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('🌿', style: TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(g.note, style: const TextStyle(color: ink, fontSize: 13, height: 1.55))),
+                  ]),
+                ),
+                const SizedBox(height: 22),
+                Text('${g.name}の会（会うイベント）',
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: ink)),
+                const SizedBox(height: 10),
+                if (_events == null)
+                  const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+                else if (_events!.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    child: Text('いま募集中の${g.name}の会はありません。18歳以上なら、ひらくこともできます。「どの動物の会？」で「${g.name}」をえらんでください',
+                        style: const TextStyle(color: ink, height: 1.5)),
+                  )
+                else
+                  for (final e in _events!) MeetEventTile(event: e, onBack: _load),
+                const SizedBox(height: 10),
+                if (uid != null)
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _orange,
+                      side: const BorderSide(color: _orange, width: 2),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    onPressed: () async {
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const EventPage()));
+                      _load();
+                    },
+                    icon: const Icon(Icons.add),
+                    label: Text('${g.name}の会をひらく・ほかの会を見る'),
+                  ),
+              ]),
             ),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('💡', style: TextStyle(fontSize: 18)),
-              const SizedBox(width: 8),
-              Expanded(child: Text(g.note, style: const TextStyle(color: _brown, fontSize: 13, height: 1.5))),
-            ]),
           ),
-          const SizedBox(height: 18),
-          Text('🤝 ${g.name}の会うイベント',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _brown)),
-          const SizedBox(height: 10),
-          if (_events == null)
-            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-          else if (_events!.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-              child: Text('いま募集中の${g.name}の会はありません。18歳以上なら、ひらくこともできます。「どの動物の会？」で「${g.name}」をえらんでください',
-                  style: const TextStyle(color: _brown, height: 1.4)),
-            )
-          else
-            for (final e in _events!) MeetEventTile(event: e, onBack: _load),
-          const SizedBox(height: 8),
-          if (uid != null)
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _orange,
-                side: const BorderSide(color: _orange),
-                minimumSize: const Size.fromHeight(44),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-              ),
-              onPressed: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const EventPage()));
-                _load();
-              },
-              icon: const Icon(Icons.add),
-              label: Text('${g.name}の会をひらく・ほかの会を見る'),
-            ),
         ]),
       ),
     );

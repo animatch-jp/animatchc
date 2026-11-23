@@ -428,53 +428,6 @@ service cloud.firestore {
         allow delete: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
       }
     }
-    // どうぶつ公園の名札（11/20）。その日に公園に来た子。自分の名札だけ作れる・直せる・消せる
-    // 名札に出すのは、うちの子の名前・写真・動物・リボンだけ（飼い主の名前や場所は入れない）
-    match /park/{dateKey}/visitors/{uid} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null
-        && uid == request.auth.uid
-        && dateKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
-        && request.resource.data.keys().hasOnly(['petName', 'petImage', 'animal', 'emoji', 'ribbon', 'updatedAt', 'x', 'y', 'say', 'sayAt'])
-        // 公園の中の位置（0〜1）と、頭の上のふきだし（決まったことばだけ）
-        && (!('x' in request.resource.data) || (request.resource.data.x is number && request.resource.data.x >= 0 && request.resource.data.x <= 1))
-        && (!('y' in request.resource.data) || (request.resource.data.y is number && request.resource.data.y >= 0 && request.resource.data.y <= 1))
-        && (!('say' in request.resource.data) || request.resource.data.say in ['こんにちは🐾', 'いい天気だね', 'かわいいね', 'おさんぽ中', 'なかよくしてね', 'またね👋'])
-        && (!('sayAt' in request.resource.data) || request.resource.data.sayAt == request.time
-            || (resource != null && resource.data.get('sayAt', null) == request.resource.data.sayAt))
-        && request.resource.data.petName is string
-        && request.resource.data.petName.size() >= 1
-        && request.resource.data.petName.size() <= 20
-        && request.resource.data.ribbon in ['ok', 'look', 'slow']
-        && strMax(request.resource.data, 'animal', 20)
-        && strMax(request.resource.data, 'emoji', 8)
-        && (!('petImage' in request.resource.data)
-            || (request.resource.data.petImage is string
-                && request.resource.data.petImage.size() <= 500
-                && request.resource.data.petImage.matches('https://res[.]cloudinary[.]com/dx2xqewxb/.*')))
-        && request.resource.data.updatedAt == request.time;
-      allow delete: if request.auth != null && (uid == request.auth.uid || isAdmin());
-      // 名札への「あいさつ」：決まったことばだけ。自分の名札には送れない。ブロックされていたら送れない。
-      // リボンが「見るだけ」の子には送れない。読めるのは、送った人と送られた人だけ
-      match /hellos/{fromUid} {
-        allow read: if request.auth != null && (uid == request.auth.uid || fromUid == request.auth.uid);
-        allow create, update: if request.auth != null
-          && fromUid == request.auth.uid
-          && fromUid != uid
-          && notBlockedBy(uid)
-          && get(/databases/$(database)/documents/park/$(dateKey)/visitors/$(uid)).data.ribbon != 'look'
-          && request.resource.data.keys().hasOnly(['phrase', 'fromPet', 'fromImage', 'createdAt'])
-          && request.resource.data.phrase in ['こんにちは🐾', 'かわいいね', 'なかよくしてね', 'またね👋', 'おつかれさま']
-          && request.resource.data.fromPet is string
-          && request.resource.data.fromPet.size() <= 20
-          && (!('fromImage' in request.resource.data)
-              || (request.resource.data.fromImage is string
-                  && request.resource.data.fromImage.size() <= 500
-                  && request.resource.data.fromImage.matches('https://res[.]cloudinary[.]com/dx2xqewxb/.*')))
-          && request.resource.data.createdAt == request.time;
-        allow delete: if request.auth != null && (uid == request.auth.uid || fromUid == request.auth.uid);
-      }
-    }
     match /events/{eventId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null

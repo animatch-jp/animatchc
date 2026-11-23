@@ -7,7 +7,7 @@
 //  ・黄色いリボン（Yellow Dog Project）：距離がほしい子の印 → 名札のリボン
 //  ・ねこあつめ：来た子が手帳に残る・写真で広がる → 2回目で「公園の手帳」と記念写真
 //
-// データ：park/{日付}/visitors/{uid}（名札）、park/{日付}/visitors/{uid}/hellos/{送った人}（あいさつ）
+// データ：users/{uid} の park（今日の名札・位置・ふきだし・あいさつの相手）。いまのルールのままで動く
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -35,8 +35,52 @@ String parkDateKey([DateTime? d]) {
   return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
 }
 
-CollectionReference<Map<String, dynamic>> _visitors(String day) =>
-    FirebaseFirestore.instance.collection('park').doc(day).collection('visitors');
+DocumentReference<Map<String, dynamic>> _userDoc(String uid) =>
+    FirebaseFirestore.instance.collection('users').doc(uid);
+
+// ほかの人の users に書かれた park は、だれでも書けてしまうので、読むときに確かめる
+class _Visitor {
+  _Visitor(this.id, this._p);
+  final String id;
+  final Map<String, dynamic> _p;
+  Map<String, dynamic> data() => _p;
+  String get path => 'users/$id';
+}
+
+const _okEmojis = ['🐾', '🐶', '🐱', '🐰', '🐦', '🐹', '🦎', '🐟'];
+
+_Visitor? _visitorOf(_Visitor doc, String day) {
+  final raw = doc.data()['park'];
+  if (raw is! Map || raw['day'] != day) return null;
+  String? str(String k, int max) {
+    final v = raw[k];
+    if (v is! String) return null;
+    final t = v.trim();
+    return t.isEmpty || t.length > max ? null : t;
+  }
+
+  var name = str('petName', 20) ?? '動物好きさん';
+  if (ContentFilter.check([name]) != null) name = '動物好きさん';
+  var animal = str('animal', 20);
+  if (animal != null && ContentFilter.check([animal]) != null) animal = null;
+  final img = raw['petImage'];
+  final ribbon = raw['ribbon'];
+  final say = raw['say'];
+  final emoji = raw['emoji'];
+  final x = raw['x'], y = raw['y'];
+  return _Visitor(doc.id, {
+    'petName': name,
+    'ribbon': ribbon is String && const ['ok', 'look', 'slow'].contains(ribbon) ? ribbon : 'ok',
+    if (img is String && _cloudinary(img)) 'petImage': img,
+    if (animal != null) 'animal': animal,
+    'emoji': emoji is String && _okEmojis.contains(emoji) ? emoji : '🐾',
+    if (x is num) 'x': x.toDouble().clamp(0.0, 1.0),
+    if (y is num) 'y': y.toDouble().clamp(0.0, 1.0),
+    if (say is String && sayPhrases.contains(say)) 'say': say,
+    if (raw['sayAt'] is Timestamp) 'sayAt': raw['sayAt'],
+    if (raw['to'] is String) 'to': raw['to'],
+  });
+}
 
 bool _cloudinary(String? u) =>
     u != null && u.startsWith('https://res.cloudinary.com/dx2xqewxb/') && u.length <= 500;
@@ -58,6 +102,7 @@ const ribbons = [
 Ribbon ribbonOf(String? id) => ribbons.firstWhere((r) => r.id == id, orElse: () => ribbons.first);
 
 const helloPhrases = ['こんにちは🐾', 'かわいいね', 'なかよくしてね', 'またね👋', 'おつかれさま'];
+const sayPhrases = ['こんにちは🐾', 'いい天気だね', 'かわいいね', 'おさんぽ中', 'なかよくしてね', 'またね👋', 'おつかれさま'];
 
 // 動物ごとのエリア（生き物に合った場所）
 const _areaNames = {
@@ -112,7 +157,6 @@ const _bgPhoto =
     'https://images.unsplash.com/photo-1759750909584-b96825e93de8?auto=format&fit=crop&w=1600&q=70';
 const _bgCredit = '写真：Maxim Nikiforov / Unsplash';
 
-const sayPhrases = ['こんにちは🐾', 'いい天気だね', 'かわいいね', 'おさんぽ中', 'なかよくしてね', 'またね👋'];
 
 class _Place {
   final String key;
@@ -184,15 +228,13 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
   Duration _last = Duration.zero;
   Duration _now = Duration.zero;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _helloSub;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
+  List<_Visitor> _docs = [];
   final Map<String, _Mover> _m = {};
   final Map<String, String> _bubbleText = {};
   final Map<String, DateTime> _bubbleAt = {};
   final Map<String, DateTime> _sayShown = {};
   final List<_Paw> _paws = [];
   final Map<String, Map<String, dynamic>> _met = {}; // 今日あいさつした子
-  final Set<String> _helloSeen = {};
   final _rnd = math.Random();
   final String _day = parkDateKey();
   Size _screen = Size.zero;
@@ -210,7 +252,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
-  QueryDocumentSnapshot<Map<String, dynamic>>? get _meDoc {
+  _Visitor? get _meDoc {
     for (final d in _docs) {
       if (d.id == _uid) return d;
     }
@@ -223,9 +265,10 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     BlockedUsers.instance.ensureListening();
     TabReselect.tabs[2].addListener(_centerOnMe);
     _ticker = createTicker(_tick)..start();
-    _sub = _visitors(_day)
-        .orderBy('updatedAt', descending: true)
-        .limit(40)
+    _sub = FirebaseFirestore.instance
+        .collection('users')
+        .where('park.day', isEqualTo: _day)
+        .limit(60)
         .snapshots()
         .listen(_onVisitors, onError: (e) => debugPrint('公園のエラー: $e'));
   }
@@ -241,7 +284,6 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     TabReselect.tabs[2].removeListener(_centerOnMe);
     _ticker.dispose();
     _sub?.cancel();
-    _helloSub?.cancel();
     _posTimer?.cancel();
     super.dispose();
   }
@@ -254,7 +296,11 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
   }
 
   void _onVisitors(QuerySnapshot<Map<String, dynamic>> q) {
-    final docs = q.docs.where((d) => !BlockedUsers.instance.isBlocked(d.id)).toList();
+    final docs = q.docs
+        .map((d) => _visitorOf(d, _day))
+        .whereType<_Visitor>()
+        .where((v) => !BlockedUsers.instance.isBlocked(v.id))
+        .toList();
     final ids = docs.map((d) => d.id).toSet();
     _m.removeWhere((k, _) => !ids.contains(k));
     for (final d in docs) {
@@ -277,45 +323,25 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
       final at = (data['sayAt'] as Timestamp?)?.toDate();
       if (say != null && at != null && _sayShown[d.id] != at) {
         _sayShown[d.id] = at;
-        if (d.id != _uid && DateTime.now().difference(at).inSeconds.abs() < 20) _bubble(d.id, say);
+        final fresh = DateTime.now().difference(at).inSeconds.abs() < 60;
+        if (d.id != _uid && fresh) {
+          _bubble(d.id, say);
+          // うちの子へのあいさつ
+          if (data['to'] == _uid && _uid != null) {
+            _met[d.id] = {'name': data['petName'], 'image': data['petImage'], 'phrase': say};
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('${data['petName']}が「$say」とあいさつしてくれました。押すと、かえせます'),
+                duration: const Duration(seconds: 3),
+              ));
+            }
+          }
+        }
       }
     }
     if (_follow != null && !ids.contains(_follow)) _follow = null;
-    final hadMe = _meDoc != null;
     _docs = docs;
-    if (!hadMe && _meDoc != null) _listenHellos();
     if (mounted) setState(() {});
-  }
-
-  void _listenHellos() {
-    final uid = _uid;
-    if (uid == null || _helloSub != null) return;
-    var first = true;
-    _helloSub = _visitors(_day)
-        .doc(uid)
-        .collection('hellos')
-        .orderBy('createdAt', descending: true)
-        .limit(30)
-        .snapshots()
-        .listen((q) {
-      for (final h in q.docs) {
-        if (BlockedUsers.instance.isBlocked(h.id)) continue;
-        final d = h.data();
-        final key = '${h.id}_${(d['createdAt'] as Timestamp?)?.millisecondsSinceEpoch}';
-        if (_helloSeen.contains(key)) continue;
-        _helloSeen.add(key);
-        _met[h.id] = {'name': d['fromPet'], 'image': d['fromImage'], 'phrase': d['phrase']};
-        if (!first && mounted) {
-          _bubble(h.id, (d['phrase'] as String?) ?? '🐾');
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${d['fromPet'] ?? 'だれか'}があいさつしてくれました。押すと、かえせます'),
-            duration: const Duration(seconds: 3),
-          ));
-        }
-      }
-      first = false;
-      if (mounted) setState(() {});
-    }, onError: (e) => debugPrint('あいさつの読みこみエラー: $e'));
   }
 
   void _bubble(String id, String text) {
@@ -328,11 +354,11 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     if (uid == null) return;
     _posTimer?.cancel();
     _posTimer = Timer(const Duration(milliseconds: 400), () {
-      _visitors(_day).doc(uid).set({
-        'x': double.parse(x.toStringAsFixed(3)),
-        'y': double.parse(y.toStringAsFixed(3)),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true)).catchError((e) => debugPrint('位置のエラー: $e'));
+      _userDoc(uid).update({
+        'park.x': double.parse(x.toStringAsFixed(3)),
+        'park.y': double.parse(y.toStringAsFixed(3)),
+        'park.updatedAt': FieldValue.serverTimestamp(),
+      }).catchError((e) => debugPrint('位置のエラー: $e'));
     });
   }
 
@@ -341,11 +367,12 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     if (uid == null) return;
     setState(() => _bubble(uid, phrase));
     try {
-      await _visitors(_day).doc(uid).set({
-        'say': phrase,
-        'sayAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await _userDoc(uid).update({
+        'park.say': phrase,
+        'park.sayAt': FieldValue.serverTimestamp(),
+        'park.to': FieldValue.delete(),
+        'park.updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       debugPrint('ふきだしのエラー: $e');
     }
@@ -635,7 +662,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     );
   }
 
-  Widget _petIcon(QueryDocumentSnapshot<Map<String, dynamic>> doc, _Mover o, bool isMe) {
+  Widget _petIcon(_Visitor doc, _Mover o, bool isMe) {
     final d = doc.data();
     final ribbon = ribbonOf(d['ribbon'] as String?);
     final img = d['petImage'] as String?;
@@ -790,7 +817,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     ]);
   }
 
-  Widget _bottomBar(QueryDocumentSnapshot<Map<String, dynamic>>? meDoc) {
+  Widget _bottomBar(_Visitor? meDoc) {
     if (meDoc == null) {
       return Pressable(
         onTap: () => _reception(null),
@@ -832,7 +859,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     ]);
   }
 
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _near(_Place p) => _docs.where((d) {
+  List<_Visitor> _near(_Place p) => _docs.where((d) {
         final o = _m[d.id];
         if (o == null || d.id == _uid) return false;
         final dx = (o.x - p.x) * _world.width, dy = (o.y - p.y - .05) * _world.height;
@@ -1098,7 +1125,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     }
   }
 
-  void _openTag(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+  void _openTag(_Visitor d) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -1122,7 +1149,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     );
   }
 
-  void _toggleFollow(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+  void _toggleFollow(_Visitor d) {
     if (_follow == d.id) {
       setState(() => _follow = null);
       _say('またね👋');
@@ -1227,7 +1254,7 @@ class _ReceptionSheetState extends State<_ReceptionSheet> {
       'y': (widget.current?['y'] as num?)?.toDouble() ?? 0.97,
     };
     try {
-      await _visitors(parkDateKey()).doc(widget.uid).set(data);
+      await _userDoc(widget.uid).update({'park': {...data, 'day': parkDateKey()}});
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('名札のエラー: $e');
@@ -1371,8 +1398,8 @@ class _NameTagSheet extends StatefulWidget {
     this.onWalk,
     this.onSent,
   });
-  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  final QueryDocumentSnapshot<Map<String, dynamic>>? me;
+  final _Visitor doc;
+  final _Visitor? me;
   final String? myUid;
   final bool following;
   final VoidCallback? onWalk; // いっしょに歩く（もう一度押すとやめる）
@@ -1395,13 +1422,13 @@ class _NameTagSheetState extends State<_NameTagSheet> {
       return;
     }
     setState(() => _sending = true);
-    final myImg = me.data()['petImage'] as String?;
     try {
-      await widget.doc.reference.collection('hellos').doc(uid).set({
-        'phrase': phrase,
-        'fromPet': ((me.data()['petName'] as String?) ?? '').trim(),
-        if (_cloudinary(myImg)) 'fromImage': myImg,
-        'createdAt': FieldValue.serverTimestamp(),
+      // うちの子の頭の上に、あいさつのふきだし。相手には「あいさつしてくれました」と出る
+      await _userDoc(uid).update({
+        'park.say': phrase,
+        'park.sayAt': FieldValue.serverTimestamp(),
+        'park.to': widget.doc.id,
+        'park.updatedAt': FieldValue.serverTimestamp(),
       });
       if (mounted) setState(() => _sent = phrase);
       widget.onSent?.call(phrase);
@@ -1501,7 +1528,7 @@ class _NameTagSheetState extends State<_NameTagSheet> {
                       userName: (d['petName'] as String?) ?? '',
                       targetUid: widget.doc.id,
                       contentLabel: 'どうぶつ公園の名札',
-                      contentRef: widget.doc.reference.path,
+                      contentRef: widget.doc.path,
                       contentText: (d['petName'] as String?) ?? '',
                     ),
                   ),
