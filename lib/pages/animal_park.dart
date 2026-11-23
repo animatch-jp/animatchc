@@ -78,6 +78,7 @@ _Visitor? _visitorOf(QueryDocumentSnapshot<Map<String, dynamic>> doc, String day
     if (say is String && sayPhrases.contains(say)) 'say': say,
     if (raw['sayAt'] is Timestamp) 'sayAt': raw['sayAt'],
     if (raw['to'] is String) 'to': raw['to'],
+    if (raw['at'] is String && (raw['at'] as String).length <= 12) 'at': raw['at'],
   });
 }
 
@@ -143,36 +144,36 @@ String _sceneLabel(DateTime d) {
 }
 
 // ============================================================
-// 公園のページ（11/24 社長「最初は一つの画面で、あまり動かさない」「名前より、イラストや家の方が分かりやすい」
-//   「画面を動かすのは機能ごとに分ける」「アプリを入れている人は、そのまま公園に入るように」）
-//  ・公園は1画面に全部入る。ずらさない
-//  ・場所は絵（📸 写真スポット・🏮 屋台・⛺ 相談テント・🪑 ベンチ・🏠 保護団体の家・🗺️ 案内所・🌳 どうぶつエリア）
-//  ・場所を押す → うちの子がそこまで歩いて、着いたらその機能の画面に入る
+// 公園のページ（11/24 社長「最初の画面にペットはいらない」「押したら交流会みたいに」「ちゃんと描いた絵で」）
+//  ・最初の画面：描いた公園の絵（assets/images/park.webp。もとの絵は tools/park_art/gen.py）だけ。ペットは出さない
+//    場所の下に名前と「いま◯匹」「開催中」だけ出す
+//  ・場所を押す → その場所に近づいた画面（交流会）。そこに来ている子が集まって、歩く・ひとこと・あいさつ・いっしょに歩く
+//    その場所のイベントや機能にも、そこから入る
 //  ・タブを開いたら、名札なしで自動で公園に入る（うちの子を押すと名札を直せる）
-//  ・芝生を押すと歩く。ひとことは頭の上のふきだし。ほかの子を押すと、あいさつ・いっしょに歩く
+// データ：users/{uid}.park（day・名札・at＝いる場所・x,y＝その場所の中の位置・say/sayAt/to）
 // ============================================================
 
-const _bgPhoto =
-    'https://images.unsplash.com/photo-1759750909584-b96825e93de8?auto=format&fit=crop&w=1200&q=70';
-const _bgCredit = '写真：Maxim Nikiforov / Unsplash';
+const _art = 'assets/images/park.webp';
+const _artW = 1200.0, _artH = 2400.0;
 
 // アプリのチェック用のお試し表示（テスト用のページだけ。PARK_PREVIEW をつけてビルドしたときだけ使える）
 const parkPreviewAllowed = bool.fromEnvironment('PARK_PREVIEW');
 
 class _Spot {
-  final String key, emoji, label;
-  final double x, y; // 画面の中の位置（0〜1）
-  const _Spot(this.key, this.emoji, this.label, this.x, this.y);
+  final String key, label;
+  final double ax, ay; // 絵の中の建物の位置
+  final double lx, ly; // 名前を出す位置
+  const _Spot(this.key, this.label, this.ax, this.ay, this.lx, this.ly);
 }
 
 const _spots = [
-  _Spot('areas', '🌳', 'どうぶつエリア', .5, .19),
-  _Spot('photo', '📸', '写真スポット', .17, .27),
-  _Spot('yatai', '🏮', '屋台', .83, .27),
-  _Spot('tent', '⛺', '相談テント', .14, .5),
-  _Spot('bench', '🪑', 'ベンチ', .86, .5),
-  _Spot('org', '🏠', '保護団体の家', .2, .75),
-  _Spot('info', '🗺️', '案内所', .8, .75),
+  _Spot('areas', 'どうぶつエリア', 600, 300, 600, 445),
+  _Spot('photo', '写真スタジオ', 230, 700, 230, 830),
+  _Spot('yatai', '屋台', 970, 700, 970, 830),
+  _Spot('tent', '相談テント', 200, 1330, 200, 1450),
+  _Spot('bench', 'ベンチ広場', 990, 1330, 990, 1500),
+  _Spot('org', '保護団体の家', 250, 1880, 230, 2055),
+  _Spot('info', '案内所', 950, 1880, 950, 2045),
 ];
 
 const _soudanRoom = HirobaRoom(
@@ -183,6 +184,229 @@ const _soudanRoom = HirobaRoom(
   colors: [Color(0xFF7BC6FF), Color(0xFF4B8FE2)],
   starters: ['はじめて飼うので', 'こんなとき、どうしていますか？'],
 );
+
+// 動物ごとの場所の写真（Unsplash）
+const _groupPhotos = {
+  'dog': 'photo-1704895598909-dd19e72fc3ae',
+  'cat': 'photo-1574158622682-e40e69881006',
+  'rabbit': 'photo-1630535590772-ed554b4f4096',
+  'bird': 'photo-1594911588637-c9e891bd7858',
+  'small': 'photo-1721327900411-b315dce4388e',
+  'reptile': 'photo-1633767319476-d43c16b828c4',
+  'other': 'photo-1625369708811-65ebfc5ca632',
+};
+
+String _spotOfEvent(OnlineEvent e) => switch (e.kind) {
+      'photo' => 'photo',
+      'talk' => 'bench',
+      _ => 'yatai',
+    };
+
+OnlineEvent? _eventAt(String spot, DateTime now) {
+  for (final e in [...liveOnlineEvents(now), ...upcomingOnlineEvents(now)]) {
+    if (_spotOfEvent(e) == spot) return e;
+  }
+  return null;
+}
+
+Color _tintOf(DateTime now) => switch (_timeOf(now)) {
+      _DayTime.morning => const Color(0x14FFDCAA),
+      _DayTime.day => const Color(0x00000000),
+      _DayTime.evening => const Color(0x33FF783C),
+      _DayTime.night => const Color(0x590F1946),
+    };
+
+Stream<List<_Visitor>> _parkStream(String day) => FirebaseFirestore.instance
+    .collection('users')
+    .where('park.day', isEqualTo: day)
+    .limit(80)
+    .snapshots()
+    .map((q) => q.docs
+        .map((d) => _visitorOf(d, day))
+        .whereType<_Visitor>()
+        .where((v) => !BlockedUsers.instance.isBlocked(v.id))
+        .toList());
+
+// ---------- 最初の画面 ----------
+
+class AnimalParkPage extends StatefulWidget {
+  const AnimalParkPage({super.key, this.preview = false});
+  final bool preview;
+
+  @override
+  State<AnimalParkPage> createState() => _AnimalParkPageState();
+}
+
+class _AnimalParkPageState extends State<AnimalParkPage> {
+  final String _day = parkDateKey();
+  StreamSubscription<List<_Visitor>>? _sub;
+  List<_Visitor> _all = [];
+  bool _autoTried = false;
+
+  String? get _uid => widget.preview ? 'me' : FirebaseAuth.instance.currentUser?.uid;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.preview) {
+      _all = [
+        _Visitor('a', {'petName': 'こむぎ', 'at': 'bench'}),
+        _Visitor('b', {'petName': 'もち', 'at': 'bench'}),
+        _Visitor('c', {'petName': 'ぎん', 'at': 'photo'}),
+      ];
+      return;
+    }
+    BlockedUsers.instance.ensureListening();
+    _sub = _parkStream(_day).listen((v) {
+      _all = v;
+      if (!v.any((d) => d.id == _uid)) _autoEnter();
+      if (mounted) setState(() {});
+    }, onError: (e) => debugPrint('公園のエラー: $e'));
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  // アプリを入れている人は、タブを開いたらそのまま公園に入る
+  Future<void> _autoEnter() async {
+    final uid = _uid;
+    if (_autoTried || widget.preview || uid == null) return;
+    _autoTried = true;
+    try {
+      final pets = await _userDoc(uid).collection('pets').limit(1).get();
+      final p = pets.docs.isEmpty ? null : pets.docs.first.data();
+      final name = ((p?['name'] as String?) ?? '').trim();
+      final type = ((p?['type'] as String?) ?? '').trim();
+      final img = p?['imageUrl'] as String?;
+      await _userDoc(uid).update({
+        'park': {
+          'day': _day,
+          'petName': name.isEmpty || name.length > 20 ? '動物好きさん' : name,
+          'ribbon': 'ok',
+          'emoji': '🐾',
+          if (_cloudinary(img)) 'petImage': img,
+          if (type.isNotEmpty && type.length <= 20) 'animal': type,
+          'at': '',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }
+      });
+    } catch (e) {
+      debugPrint('公園に入れませんでした: $e');
+    }
+  }
+
+  void _open(_Spot s) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 450),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (_, __, ___) => _ParkScenePage(spot: s, preview: widget.preview),
+        transitionsBuilder: (_, a, __, child) {
+          final c = CurvedAnimation(parent: a, curve: Curves.easeOutCubic);
+          return FadeTransition(
+            opacity: c,
+            child: ScaleTransition(scale: Tween(begin: .92, end: 1.0).animate(c), child: child),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final top = MediaQuery.of(context).padding.top;
+    return Scaffold(
+      backgroundColor: const Color(0xFF8FD068),
+      body: LayoutBuilder(builder: (context, c) {
+        final W = c.maxWidth, H = c.maxHeight;
+        final sc = math.max(W / _artW, H / _artH);
+        final ox = (W - _artW * sc) / 2, oy = (H - _artH * sc) / 2;
+        Offset at(double x, double y) => Offset(ox + x * sc, oy + y * sc);
+        return Stack(children: [
+          Positioned.fill(child: Image.asset(_art, fit: BoxFit.cover)),
+          Positioned.fill(child: IgnorePointer(child: ColoredBox(color: _tintOf(now)))),
+          // 建物を押す
+          for (final s in _spots)
+            Positioned(
+              left: at(s.ax, s.ay).dx - 150 * sc,
+              top: at(s.ax, s.ay).dy - 160 * sc,
+              width: 300 * sc,
+              height: (s.ly - s.ay + 200) * sc,
+              child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _open(s)),
+            ),
+          for (final s in _spots) _label(s, at(s.lx, s.ly), now),
+          Positioned(
+            left: 12,
+            right: 12,
+            top: top + 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xF2FFFAF4),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 3))],
+              ),
+              child: Row(children: [
+                const Text('どうぶつ公園', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _ink)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('${_sceneLabel(now)}・場所を押すと入れます',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                ),
+              ]),
+            ),
+          ),
+        ]);
+      }),
+    );
+  }
+
+  Widget _label(_Spot s, Offset p, DateTime now) {
+    final n = _all.where((v) => v.data()['at'] == s.key).length;
+    final e = (s.key == 'photo' || s.key == 'yatai' || s.key == 'bench') ? _eventAt(s.key, now) : null;
+    final live = e != null && e.isLive(now);
+    return Positioned(
+      left: p.dx - 80,
+      top: p.dy - 14,
+      width: 160,
+      child: IgnorePointer(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xF5FFFAF4),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(s.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: _ink)),
+              if (n > 0) ...[
+                const SizedBox(width: 5),
+                Text('$n匹', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: _orange)),
+              ],
+            ]),
+          ),
+          if (live)
+            Container(
+              margin: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: const Color(0xFFE84A5F), borderRadius: BorderRadius.circular(9)),
+              child: const Text('開催中', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white)),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ---------- 場所の中（交流会） ----------
 
 class _Mover {
   double x, y;
@@ -203,19 +427,20 @@ class _Paw {
   const _Paw(this.x, this.y, this.t);
 }
 
-class AnimalParkPage extends StatefulWidget {
-  const AnimalParkPage({super.key, this.preview = false});
+class _ParkScenePage extends StatefulWidget {
+  const _ParkScenePage({required this.spot, this.preview = false});
+  final _Spot spot;
   final bool preview;
 
   @override
-  State<AnimalParkPage> createState() => _AnimalParkPageState();
+  State<_ParkScenePage> createState() => _ParkScenePageState();
 }
 
-class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProviderStateMixin {
+class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   Duration _last = Duration.zero;
   Duration _now = Duration.zero;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
+  StreamSubscription<List<_Visitor>>? _sub;
   List<_Visitor> _docs = [];
   final Map<String, _Mover> _m = {};
   final Map<String, String> _bubbleText = {};
@@ -227,13 +452,12 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
   final String _day = parkDateKey();
   Size _size = Size.zero;
   bool _still = false;
-  bool _autoTried = false;
-  String? _goal;
   String? _follow;
   double _pawDist = 0;
   Timer? _posTimer;
   DateTime _lastFollowWrite = DateTime.fromMillisecondsSinceEpoch(0);
 
+  _Spot get s => widget.spot;
   String? get _uid => widget.preview ? 'me' : FirebaseAuth.instance.currentUser?.uid;
 
   _Visitor? get _meDoc {
@@ -249,11 +473,10 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     _ticker = createTicker(_tick)..start();
     if (widget.preview) {
       _docs = [
-        _Visitor('me', {'petName': 'うちの子', 'ribbon': 'ok', 'emoji': '🐶', 'x': .5, 'y': .62}),
-        _Visitor('a', {'petName': 'こむぎ', 'ribbon': 'ok', 'emoji': '🐶', 'animal': '柴犬', 'x': .38, 'y': .45}),
-        _Visitor('b', {'petName': 'もち', 'ribbon': 'slow', 'emoji': '🐰', 'animal': 'うさぎ', 'x': .62, 'y': .4}),
-        _Visitor('c', {'petName': 'ぎん', 'ribbon': 'look', 'emoji': '🐱', 'animal': 'ねこ', 'x': .66, 'y': .66}),
-        _Visitor('d', {'petName': 'ぴーちゃん', 'ribbon': 'ok', 'emoji': '🐦', 'animal': 'インコ', 'x': .34, 'y': .72}),
+        _Visitor('me', {'petName': 'うちの子', 'ribbon': 'ok', 'emoji': '🐶', 'x': .5, 'y': .66}),
+        _Visitor('a', {'petName': 'こむぎ', 'ribbon': 'ok', 'emoji': '🐶', 'animal': '柴犬', 'x': .3, 'y': .55}),
+        _Visitor('b', {'petName': 'もち', 'ribbon': 'slow', 'emoji': '🐰', 'animal': 'うさぎ', 'x': .72, 'y': .52}),
+        _Visitor('c', {'petName': 'ぎん', 'ribbon': 'look', 'emoji': '🐱', 'animal': 'ねこ', 'x': .75, 'y': .72}),
       ];
       for (final d in _docs) {
         _m[d.id] = _Mover((d.data()['x'] as double), (d.data()['y'] as double));
@@ -262,12 +485,8 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
       return;
     }
     BlockedUsers.instance.ensureListening();
-    _sub = FirebaseFirestore.instance
-        .collection('users')
-        .where('park.day', isEqualTo: _day)
-        .limit(60)
-        .snapshots()
-        .listen(_onVisitors, onError: (e) => debugPrint('公園のエラー: $e'));
+    _enter();
+    _sub = _parkStream(_day).listen(_onVisitors, onError: (e) => debugPrint('公園のエラー: $e'));
   }
 
   @override
@@ -281,28 +500,43 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     _ticker.dispose();
     _sub?.cancel();
     _posTimer?.cancel();
+    final uid = _uid;
+    if (!widget.preview && uid != null) {
+      _userDoc(uid).update({'park.at': '', 'park.updatedAt': FieldValue.serverTimestamp()}).catchError((e) {
+        debugPrint('公園を出るときのエラー: $e');
+      });
+    }
     super.dispose();
   }
 
-  // ---------- データ ----------
-
-  double _seed(String id, int salt) {
-    final h = id.codeUnits.fold<int>(salt * 7919, (a, b) => (a * 31 + b) & 0x7fffffff);
-    return (h % 1000) / 1000;
+  // この場所に入る（うちの子が、この場所の芝生に出てくる）
+  Future<void> _enter() async {
+    final uid = _uid;
+    if (uid == null) return;
+    final x = .35 + _rnd.nextDouble() * .3, y = .62 + _rnd.nextDouble() * .14;
+    _m[uid] = _Mover(.5, .95)
+      ..tx = x
+      ..ty = y;
+    try {
+      await _userDoc(uid).update({
+        'park.at': s.key,
+        'park.x': double.parse(x.toStringAsFixed(3)),
+        'park.y': double.parse(y.toStringAsFixed(3)),
+        'park.updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('場所に入れませんでした: $e');
+    }
   }
 
-  void _onVisitors(QuerySnapshot<Map<String, dynamic>> q) {
-    final docs = q.docs
-        .map((d) => _visitorOf(d, _day))
-        .whereType<_Visitor>()
-        .where((v) => !BlockedUsers.instance.isBlocked(v.id))
-        .toList();
+  void _onVisitors(List<_Visitor> all) {
+    final docs = all.where((v) => v.data()['at'] == s.key || v.id == _uid).toList();
     final ids = docs.map((d) => d.id).toSet();
-    _m.removeWhere((k, _) => !ids.contains(k));
+    _m.removeWhere((k, _) => !ids.contains(k) && k != _uid);
     for (final d in docs) {
       final data = d.data();
-      final x = ((data['x'] as num?)?.toDouble() ?? (.3 + _seed(d.id, 1) * .4)).clamp(0.0, 1.0);
-      final y = ((data['y'] as num?)?.toDouble() ?? (.4 + _seed(d.id, 2) * .4)).clamp(0.0, 1.0);
+      final x = ((data['x'] as num?)?.toDouble() ?? .5).clamp(0.0, 1.0);
+      final y = ((data['y'] as num?)?.toDouble() ?? .7).clamp(0.0, 1.0);
       final o = _m[d.id];
       if (o == null) {
         _m[d.id] = _Mover(x, y);
@@ -336,43 +570,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     }
     if (_follow != null && !ids.contains(_follow)) _follow = null;
     _docs = docs;
-    if (_meDoc == null) _autoEnter();
     if (mounted) setState(() {});
-  }
-
-  // アプリを入れている人は、タブを開いたらそのまま公園に入る（名札はうちの子を押すと直せる）
-  Future<void> _autoEnter() async {
-    final uid = _uid;
-    if (_autoTried || widget.preview || uid == null) return;
-    _autoTried = true;
-    try {
-      final pets = await _userDoc(uid).collection('pets').limit(1).get();
-      final p = pets.docs.isEmpty ? null : pets.docs.first.data();
-      final name = ((p?['name'] as String?) ?? '').trim();
-      final type = ((p?['type'] as String?) ?? '').trim();
-      final img = p?['imageUrl'] as String?;
-      await _userDoc(uid).update({
-        'park': {
-          'day': _day,
-          'petName': name.isEmpty || name.length > 20 ? '動物好きさん' : name,
-          'ribbon': 'ok',
-          'emoji': '🐾',
-          if (_cloudinary(img)) 'petImage': img,
-          if (type.isNotEmpty && type.length <= 20) 'animal': type,
-          'x': double.parse((.35 + _rnd.nextDouble() * .3).toStringAsFixed(3)),
-          'y': double.parse((.55 + _rnd.nextDouble() * .2).toStringAsFixed(3)),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('公園に入りました🌳 うちの子を押すと、名札を直せます'),
-          duration: Duration(seconds: 3),
-        ));
-      }
-    } catch (e) {
-      debugPrint('公園に入れませんでした: $e');
-    }
   }
 
   void _bubble(String id, String text) {
@@ -410,7 +608,8 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     }
   }
 
-  // ---------- 動き ----------
+  // 歩ける場所（画面の中の芝生と広場。上の建物と下のボタンにはかからない）
+  static const _minY = .44, _maxY = .8;
 
   void _tick(Duration now) {
     final dt = ((now - _last).inMicroseconds / 1e6).clamp(0.0, 0.05);
@@ -425,14 +624,14 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
       if (isMe && _follow != null) {
         final f = _m[_follow];
         if (f != null) {
-          o.tx = (f.x + 44 / W).clamp(0.05, 0.95);
-          o.ty = (f.y + 10 / H).clamp(0.2, 0.88);
+          o.tx = (f.x + 44 / W).clamp(0.06, 0.94);
+          o.ty = (f.y + 10 / H).clamp(_minY, _maxY);
         }
       }
       final dx = (o.tx - o.x) * W, dy = (o.ty - o.y) * H;
       final d = math.sqrt(dx * dx + dy * dy);
       if (d > 2) {
-        final st = _still ? d : math.min(d, (isMe ? 150.0 : 50.0) * dt);
+        final st = _still ? d : math.min(d, (isMe ? 130.0 : 45.0) * dt);
         o.x += dx / d * st / W;
         o.y += dy / d * st / H;
         o.walking = !_still;
@@ -445,16 +644,11 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
         }
       } else {
         o.walking = false;
-        if (isMe && _goal != null) {
-          final g = _goal!;
-          _goal = null;
-          WidgetsBinding.instance.addPostFrameCallback((_) => _openSpot(g));
-        }
         if (!isMe && !_still) {
           o.wait -= dt;
           if (o.wait <= 0) {
-            o.tx = (o.hx + (_rnd.nextDouble() - .5) * 60 / W).clamp(0.05, 0.95);
-            o.ty = (o.hy + (_rnd.nextDouble() - .5) * 40 / H).clamp(0.2, 0.88);
+            o.tx = (o.hx + (_rnd.nextDouble() - .5) * 60 / W).clamp(0.06, 0.94);
+            o.ty = (o.hy + (_rnd.nextDouble() - .5) * 40 / H).clamp(_minY, _maxY);
             o.wait = 3 + _rnd.nextDouble() * 5;
           }
         }
@@ -470,64 +664,67 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     if (mounted) setState(() {});
   }
 
-  void _walkTo(double fx, double fy, {String? goal, bool keepFollow = false}) {
+  void _walkTo(double fx, double fy, {bool keepFollow = false}) {
     final uid = _uid;
     final me = uid == null ? null : _m[uid];
     if (me == null) return;
     if (!keepFollow) _follow = null;
-    me.tx = fx.clamp(0.05, 0.95);
-    me.ty = fy.clamp(0.2, 0.88);
-    _goal = goal;
+    me.tx = fx.clamp(0.06, 0.94);
+    me.ty = fy.clamp(_minY, _maxY);
     _writePos(me.tx, me.ty);
   }
 
-  String _spotOfEvent(OnlineEvent e) => switch (e.kind) {
-        'photo' => 'photo',
-        'talk' => 'bench',
-        _ => 'yatai',
-      };
+  // ---------- この場所でできること ----------
 
-  OnlineEvent? _eventAt(String spot, DateTime now) {
-    for (final e in [...liveOnlineEvents(now), ...upcomingOnlineEvents(now)]) {
-      if (_spotOfEvent(e) == spot) return e;
+  void _go(Widget page) {
+    if (widget.preview) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('（お試し表示）ここで中に入ります')));
+      return;
     }
-    return null;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
 
-  // 場所に着いたら、その機能の画面に入る
-  void _openSpot(String key) {
-    if (!mounted) return;
-    final now = DateTime.now();
-    void open(Widget page) {
-      if (widget.preview) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('（お試し表示）ここで「$key」の画面に入ります')));
-        return;
-      }
-      Navigator.push(context, MaterialPageRoute(builder: (_) => page));
-    }
-
-    switch (key) {
+  ({String desc, String? button, VoidCallback? onTap}) _what(DateTime now) {
+    switch (s.key) {
       case 'areas':
-        open(const AnimalAreasPage());
+        return (desc: '動物ごとの場所への入口です。下からえらぶと、同じ動物を飼っている人の部屋と会に行けます。', button: null, onTap: null);
       case 'tent':
-        open(HirobaRoomPage(room: _soudanRoom));
+        return (
+          desc: '飼い方で困ったことを、先輩の飼い主さんに聞けるテントです。',
+          button: '相談テントに入る',
+          onTap: () => _go(HirobaRoomPage(room: _soudanRoom))
+        );
       case 'org':
-        open(const AnimalMapPage(initialCategory: 'org'));
+        return (
+          desc: '保護団体の人たちの家です。新しい家族をさがしている子に会えます。',
+          button: '保護団体を見る',
+          onTap: () => _go(const AnimalMapPage(initialCategory: 'org'))
+        );
       case 'info':
-        open(const MeetBoardPage());
+        return (
+          desc: '近くで会うイベント（18歳以上）をさがしたり、ひらいたりできます。',
+          button: '会うイベントを見る',
+          onTap: () => _go(const MeetBoardPage())
+        );
       default:
-        final e = _eventAt(key, now);
+        final e = _eventAt(s.key, now);
         if (e == null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(key == 'photo'
-                ? 'いまは写真大会はありません'
-                : key == 'bench'
-                    ? 'いまは話しあい会はありません'
-                    : '屋台はいまお休みです'),
-          ));
-        } else {
-          open(HirobaRoomPage(room: e.room));
+          return (
+            desc: s.key == 'photo'
+                ? '写真大会をする場所です。いまは写真大会はありません。'
+                : s.key == 'bench'
+                    ? '話しあい会をする広場です。いまは話しあい会はありません。'
+                    : 'お祭りやチャレンジのときに屋台が出ます。いまはお休みです。',
+            button: null,
+            onTap: null
+          );
         }
+        final live = e.isLive(now);
+        return (
+          desc: live ? 'いま「${e.title}」をやっています。' : '${whenText(e.start)}から「${e.title}」があります。',
+          button: live ? '${e.title}に参加する' : 'のぞいてみる',
+          onTap: () => _go(HirobaRoomPage(room: e.room))
+        );
     }
   }
 
@@ -536,51 +733,36 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final dt = _timeOf(now);
     final top = MediaQuery.of(context).padding.top;
-    final tint = switch (dt) {
-      _DayTime.morning => const Color(0x14FFDCAA),
-      _DayTime.day => const Color(0x00000000),
-      _DayTime.evening => const Color(0x33FF783C),
-      _DayTime.night => const Color(0x590F1946),
-    };
-    final lit = dt == _DayTime.evening || dt == _DayTime.night;
     return Scaffold(
-      backgroundColor: const Color(0xFF6FA35A),
+      backgroundColor: const Color(0xFF8FD068),
       body: LayoutBuilder(builder: (context, c) {
         _size = c.biggest;
         final W = _size.width, H = _size.height;
+        // 絵を近づける：建物が画面の上のほうに来るように
+        final sc = W / 560;
+        var left = W / 2 - s.ax * sc;
+        var topOff = H * .27 - s.ay * sc;
+        left = left.clamp(W - _artW * sc, 0.0);
+        topOff = topOff.clamp(H - _artH * sc, 0.0);
         final uid = _uid;
         final order = _m.keys.toList()..sort((a, b) => _m[a]!.y.compareTo(_m[b]!.y));
         final byId = {for (final d in _docs) d.id: d};
+        final what = _what(now);
         return Stack(children: [
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (d) => _walkTo(d.localPosition.dx / W, d.localPosition.dy / H),
-              child: Stack(children: [
-                Positioned.fill(
-                  child: Image.network(_bgPhoto,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => Container(color: const Color(0xFF6FA35A))),
+              child: Stack(clipBehavior: Clip.hardEdge, children: [
+                Positioned(
+                  left: left,
+                  top: topOff,
+                  width: _artW * sc,
+                  height: _artH * sc,
+                  child: Image.asset(_art, fit: BoxFit.fill),
                 ),
-                Positioned.fill(child: IgnorePointer(child: ColoredBox(color: tint))),
-                if (lit)
-                  for (final l in const [Offset(.32, .38), Offset(.7, .62)])
-                    Positioned(
-                      left: l.dx * W - 90,
-                      top: l.dy * H - 90,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 180,
-                          height: 180,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(colors: [Color(0x66FFE296), Color(0x00FFE296)], stops: [0, .7]),
-                          ),
-                        ),
-                      ),
-                    ),
+                Positioned.fill(child: IgnorePointer(child: ColoredBox(color: _tintOf(now)))),
                 for (final p in _paws)
                   Positioned(
                     left: p.x * W - 5,
@@ -596,7 +778,6 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
                       ),
                     ),
                   ),
-                for (final s in _spots) _spot(s, now),
                 if (_follow != null && uid != null && _m[uid] != null && _m[_follow] != null)
                   Positioned.fill(
                     child: IgnorePointer(
@@ -609,88 +790,158 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
                     ),
                   ),
                 for (final id in order)
-                  if (byId[id] != null) _petIcon(byId[id]!, _m[id]!, id == uid),
+                  if (byId[id] != null || id == uid) _petIcon(byId[id], id, _m[id]!, id == uid),
               ]),
             ),
           ),
-          Positioned(left: 12, right: 12, top: top + 8, child: _header(now)),
-          Positioned(left: 12, right: 12, bottom: 14, child: _bottomBar()),
+          // 上：もどる・場所の名前・いる子の数
+          Positioned(
+            left: 10,
+            right: 12,
+            top: top + 8,
+            child: Row(children: [
+              Material(
+                color: const Color(0xF2FFFAF4),
+                shape: const CircleBorder(),
+                elevation: 2,
+                child: IconButton(
+                  tooltip: '公園にもどる',
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.arrow_back_rounded, color: _ink),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xF2FFFAF4),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 3))],
+                  ),
+                  child: Row(children: [
+                    Text(s.label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _ink)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                          _docs.length <= 1 ? 'まだほかにだれもいません' : 'いま ${_docs.length}匹が来ています',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                    ),
+                  ]),
+                ),
+              ),
+            ]),
+          ),
+          // 下：この場所でできること
+          Positioned(left: 12, right: 12, bottom: 12, child: _panel(what)),
         ]);
       }),
     );
   }
 
-  Widget _spot(_Spot s, DateTime now) {
-    final e = (s.key == 'photo' || s.key == 'yatai' || s.key == 'bench') ? _eventAt(s.key, now) : null;
-    final live = e != null && e.isLive(now);
-    final soon = e != null && !live && e.start.difference(now).inHours < 24;
-    return Positioned(
-      left: s.x * _size.width - 50,
-      top: s.y * _size.height - 52,
-      width: 100,
-      child: GestureDetector(
-        onTap: () => _walkTo(s.x + (s.x < .4 ? .16 : s.x > .6 ? -.16 : 0), s.y + (s.x >= .4 && s.x <= .6 ? .1 : .02), goal: s.key),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
-            height: 18,
-            child: e != null && (live || soon)
-                ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: live ? const Color(0xFFE84A5F) : const Color(0xFF4B8FE2),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Text(live ? '開催中' : '${e.start.hour}:${e.start.minute.toString().padLeft(2, '0')}〜',
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white)),
-                  )
-                : null,
+  Widget _panel(({String desc, String? button, VoidCallback? onTap}) what) {
+    Widget small(String label, VoidCallback onTap) => Expanded(
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _ink,
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFFE6DCD0)),
+              minimumSize: const Size.fromHeight(42),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(21)),
+            ),
+            onPressed: onTap,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
           ),
-          Stack(alignment: Alignment.bottomCenter, children: [
-            Container(
-              width: 58,
-              height: 14,
-              margin: const EdgeInsets.only(bottom: 2),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: .16),
-                borderRadius: BorderRadius.circular(30),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(s.emoji, style: const TextStyle(fontSize: 44)),
-            ),
-          ]),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: const Color(0xF0FFFAF4),
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2))],
-            ),
-            child: Text(s.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: _ink)),
-          ),
-        ]),
+        );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xF7FFFAF4),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 18, offset: Offset(0, 6))],
       ),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(what.desc, style: const TextStyle(fontSize: 13, height: 1.5, color: _ink)),
+        if (s.key == 'areas') ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 78,
+            child: ListView(scrollDirection: Axis.horizontal, children: [
+              for (final g in animalGroups)
+                GestureDetector(
+                  onTap: () => _go(AnimalGroupPage(group: g)),
+                  child: SizedBox(
+                    width: 70,
+                    child: Column(children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFF2EBE2),
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 6, offset: Offset(0, 2))],
+                          image: _groupPhotos[g.key] == null
+                              ? null
+                              : DecorationImage(
+                                  image: NetworkImage(
+                                      'https://images.unsplash.com/${_groupPhotos[g.key]}?auto=format&fit=crop&crop=entropy&w=160&h=160&q=70'),
+                                  fit: BoxFit.cover),
+                        ),
+                        child: _groupPhotos[g.key] == null ? Center(child: Text(g.emoji, style: const TextStyle(fontSize: 24))) : null,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(g.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _ink)),
+                    ]),
+                  ),
+                ),
+            ]),
+          ),
+        ],
+        if (what.button != null) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: _orange,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: what.onTap,
+              child: Text(what.button!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Row(children: [
+          small('💬 ひとこと', _sayMenu),
+          const SizedBox(width: 8),
+          small('📖 手帳 ${_met.length}', _book),
+        ]),
+      ]),
     );
   }
 
-  Widget _petIcon(_Visitor doc, _Mover o, bool isMe) {
-    final d = doc.data();
+  Widget _petIcon(_Visitor? doc, String id, _Mover o, bool isMe) {
+    final d = doc?.data() ?? const <String, dynamic>{};
     final ribbon = ribbonOf(d['ribbon'] as String?);
     final img = d['petImage'] as String?;
-    final size = isMe ? 54.0 : 48.0;
+    final size = isMe ? 56.0 : 50.0;
     final hop = o.walking ? math.sin(_now.inMilliseconds / 90) * 3 - 3 : 0.0;
-    final at = _bubbleAt[doc.id];
-    final bubble = at != null && DateTime.now().difference(at).inMilliseconds < 4000 ? _bubbleText[doc.id] : null;
+    final at = _bubbleAt[id];
+    final bubble = at != null && DateTime.now().difference(at).inMilliseconds < 4000 ? _bubbleText[id] : null;
     return Positioned(
       left: o.x * _size.width - 60,
       top: o.y * _size.height - size - 40,
       width: 120,
       child: GestureDetector(
-        onTap: isMe ? () => _editTag(d) : () => _openTag(doc),
+        onTap: isMe ? () => _editTag(d) : (doc == null ? null : () => _openTag(doc)),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           SizedBox(
             height: 32,
@@ -745,7 +996,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
             width: 36,
             height: 7,
             margin: const EdgeInsets.only(top: 1),
-            decoration: BoxDecoration(color: Colors.black.withValues(alpha: .25), borderRadius: BorderRadius.circular(20)),
+            decoration: BoxDecoration(color: Colors.black.withValues(alpha: .22), borderRadius: BorderRadius.circular(20)),
           ),
           Text(isMe ? 'うちの子' : ((d['petName'] as String?) ?? ''),
               maxLines: 1,
@@ -759,69 +1010,6 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
         ]),
       ),
     );
-  }
-
-  Widget _header(DateTime now) {
-    final n = _docs.length;
-    return Row(children: [
-      Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: const Color(0xF0FFFAF4),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 3))],
-          ),
-          child: Row(children: [
-            const Text('どうぶつ公園', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _ink)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('${_sceneLabel(now)}・いま$n匹',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-            ),
-          ]),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Pressable(
-        onTap: _howTo,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: const BoxDecoration(
-            color: Color(0xF0FFFAF4),
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 3))],
-          ),
-          child: const Icon(Icons.help_outline_rounded, color: _ink, size: 22),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _bottomBar() {
-    Widget btn(String label, VoidCallback onTap) => Expanded(
-          child: Pressable(
-            onTap: onTap,
-            child: Container(
-              height: 50,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xF5FFFAF4),
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 12, offset: Offset(0, 4))],
-              ),
-              child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: _ink)),
-            ),
-          ),
-        );
-    return Row(children: [
-      btn('💬 ひとこと', _sayMenu),
-      const SizedBox(width: 10),
-      btn('📖 手帳 ${_met.length}', _book),
-    ]);
   }
 
   // ---------- 下から出る紙 ----------
@@ -844,15 +1032,15 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
       builder: (ctx) => Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         const Text('💬 ひとこと', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _ink)),
         const SizedBox(height: 4),
-        Text('うちの子の頭の上に出ます。公園にいるみんなに見えます。', style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+        Text('うちの子の頭の上に出ます。ここにいるみんなに見えます。', style: TextStyle(fontSize: 13, color: Colors.grey[700])),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final s in sayPhrases)
+          for (final p in sayPhrases)
             ActionChip(
-              label: Text(s, style: const TextStyle(fontWeight: FontWeight.w700)),
+              label: Text(p, style: const TextStyle(fontWeight: FontWeight.w700)),
               onPressed: () {
                 Navigator.pop(ctx);
-                _say(s);
+                _say(p);
               },
             ),
         ]),
@@ -883,23 +1071,6 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     ]));
   }
 
-  void _howTo() {
-    _sheet(const Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text('どうぶつ公園の使い方', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _ink)),
-      SizedBox(height: 12),
-      Text('🐾 このタブを開くと、うちの子が公園に入ります。今日いっぱい公園にいます。', style: TextStyle(height: 1.6)),
-      Text('👆 芝生を押すと、そこまで歩きます。', style: TextStyle(height: 1.6)),
-      Text('🏠 絵の場所を押すと、そこまで歩いて中に入ります。', style: TextStyle(height: 1.6)),
-      Text('   📸 写真大会　🏮 お祭り・チャレンジ　🪑 話しあい会', style: TextStyle(height: 1.6)),
-      Text('   ⛺ 相談　🏠 保護団体　🗺️ 会うイベント　🌳 動物ごとの場所', style: TextStyle(height: 1.6)),
-      Text('💬 ひとことは、頭の上に出て、みんなに見えます。', style: TextStyle(height: 1.6)),
-      Text('👋 ほかの子を押すと、あいさつや「いっしょに歩く」ができます。', style: TextStyle(height: 1.6)),
-      Text('🎀 うちの子を押すと名札を直せます。黄色いリボンは「ゆっくりね」、灰色は「見るだけ」です。', style: TextStyle(height: 1.6)),
-      SizedBox(height: 10),
-      Text(_bgCredit, style: TextStyle(fontSize: 11, color: Colors.grey)),
-    ]));
-  }
-
   Future<void> _editTag(Map<String, dynamic> current) async {
     final uid = _uid;
     if (uid == null || widget.preview) return;
@@ -908,7 +1079,7 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => _ReceptionSheet(uid: uid, current: current),
+      builder: (_) => _ReceptionSheet(uid: uid, current: {...current, 'at': s.key}),
     );
   }
 
@@ -945,114 +1116,11 @@ class _AnimalParkPageState extends State<AnimalParkPage> with SingleTickerProvid
     }
     setState(() {
       _follow = d.id;
-      _goal = null;
       _met.putIfAbsent(d.id, () => {'name': d.data()['petName'], 'image': d.data()['petImage'], 'phrase': 'いっしょに歩いた'});
     });
     _say('おさんぽ中');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${d.data()['petName'] ?? ''}といっしょに歩いています'), duration: const Duration(seconds: 2)),
-    );
-  }
-}
-
-// ============================================================
-// どうぶつエリア（公園の 🌳 から入る、別の画面）
-// ============================================================
-
-const _areaSpots = [
-  Offset(.27, .24), Offset(.73, .26), Offset(.24, .43), Offset(.76, .45),
-  Offset(.27, .62), Offset(.73, .64), Offset(.3, .8), Offset(.7, .82),
-];
-
-class AnimalAreasPage extends StatelessWidget {
-  const AnimalAreasPage({super.key, this.preview = false});
-  final bool preview;
-
-  @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
-    return Scaffold(
-      backgroundColor: const Color(0xFF6FA35A),
-      body: LayoutBuilder(builder: (context, c) {
-        final W = c.maxWidth, H = c.maxHeight;
-        return Stack(children: [
-          Positioned.fill(
-            child: Image.network(_bgPhoto,
-                fit: BoxFit.cover,
-                alignment: Alignment.bottomRight,
-                errorBuilder: (context, error, stack) => Container(color: const Color(0xFF6FA35A))),
-          ),
-          Positioned.fill(child: IgnorePointer(child: ColoredBox(color: Colors.white.withValues(alpha: .08)))),
-          for (var i = 0; i < animalGroups.length && i < _areaSpots.length; i++)
-            Positioned(
-              left: _areaSpots[i].dx * W - 60,
-              top: _areaSpots[i].dy * H - 50,
-              width: 120,
-              child: GestureDetector(
-                onTap: () {
-                  if (preview) return;
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => AnimalGroupPage(group: animalGroups[i])));
-                },
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    width: 74,
-                    height: 74,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xE6FFFAF4),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 10, offset: Offset(0, 4))],
-                    ),
-                    child: Text(animalGroups[i].emoji, style: const TextStyle(fontSize: 38)),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xF0FFFAF4),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(_areaNames[animalGroups[i].key] ?? animalGroups[i].name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: _ink)),
-                  ),
-                ]),
-              ),
-            ),
-          Positioned(
-            left: 8,
-            right: 12,
-            top: top + 8,
-            child: Row(children: [
-              Material(
-                color: const Color(0xF0FFFAF4),
-                shape: const CircleBorder(),
-                child: IconButton(
-                  tooltip: '公園にもどる',
-                  onPressed: () => Navigator.maybePop(context),
-                  icon: const Icon(Icons.arrow_back_rounded, color: _ink),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: const Color(0xF0FFFAF4),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('どうぶつエリア', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: _ink)),
-                    Text('押すと、その動物の子たちの場所へ', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-        ]);
-      }),
     );
   }
 }
@@ -1141,6 +1209,7 @@ class _ReceptionSheetState extends State<_ReceptionSheet> {
       // 公園の中の位置。はじめて入るときは入口から
       'x': (widget.current?['x'] as num?)?.toDouble() ?? 0.5,
       'y': (widget.current?['y'] as num?)?.toDouble() ?? 0.97,
+      'at': (widget.current?['at'] as String?) ?? '',
     };
     try {
       await _userDoc(widget.uid).update({'park': {...data, 'day': parkDateKey()}});
@@ -1432,3 +1501,11 @@ class _NameTagSheetState extends State<_NameTagSheet> {
   }
 }
 
+
+// テスト用のページだけで使う、交流会の画面のお試し表示（ベンチ広場）
+class ParkScenePreview extends StatelessWidget {
+  const ParkScenePreview({super.key});
+
+  @override
+  Widget build(BuildContext context) => _ParkScenePage(spot: _spots[4], preview: true);
+}

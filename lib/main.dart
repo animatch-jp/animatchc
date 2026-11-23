@@ -69,7 +69,7 @@ void main() async {
   runApp(const MyApp());
 }
 
-// テスト用のページだけで使える、公園のお試し表示（?preview=park / ?preview=areas）
+// テスト用のページだけで使える、公園のお試し表示（?preview=park / ?preview=scene）
 final String? _preview =
     kIsWeb && parkPreviewAllowed ? Uri.base.queryParameters['preview'] : null;
 
@@ -103,8 +103,8 @@ class MyApp extends StatelessWidget {
       ),
       home: _preview == 'park'
           ? const AnimalParkPage(preview: true)
-          : _preview == 'areas'
-              ? const AnimalAreasPage(preview: true)
+          : _preview == 'scene'
+              ? const ParkScenePreview()
               : const SplashPage(),
     );
   }
