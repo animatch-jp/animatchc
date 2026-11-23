@@ -49,7 +49,7 @@ class _Visitor {
 
 const _okEmojis = ['🐾', '🐶', '🐱', '🐰', '🐦', '🐹', '🦎', '🐟'];
 
-_Visitor? _visitorOf(_Visitor doc, String day) {
+_Visitor? _visitorOf(QueryDocumentSnapshot<Map<String, dynamic>> doc, String day) {
   final raw = doc.data()['park'];
   if (raw is! Map || raw['day'] != day) return null;
   String? str(String k, int max) {
