@@ -473,10 +473,10 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
     _ticker = createTicker(_tick)..start();
     if (widget.preview) {
       _docs = [
-        _Visitor('me', {'petName': 'うちの子', 'ribbon': 'ok', 'emoji': '🐶', 'x': .5, 'y': .66}),
+        _Visitor('me', {'petName': 'うちの子', 'ribbon': 'ok', 'emoji': '🐶', 'x': .5, 'y': .62}),
         _Visitor('a', {'petName': 'こむぎ', 'ribbon': 'ok', 'emoji': '🐶', 'animal': '柴犬', 'x': .3, 'y': .55}),
         _Visitor('b', {'petName': 'もち', 'ribbon': 'slow', 'emoji': '🐰', 'animal': 'うさぎ', 'x': .72, 'y': .52}),
-        _Visitor('c', {'petName': 'ぎん', 'ribbon': 'look', 'emoji': '🐱', 'animal': 'ねこ', 'x': .75, 'y': .72}),
+        _Visitor('c', {'petName': 'ぎん', 'ribbon': 'look', 'emoji': '🐱', 'animal': 'ねこ', 'x': .75, 'y': .66}),
       ];
       for (final d in _docs) {
         _m[d.id] = _Mover((d.data()['x'] as double), (d.data()['y'] as double));
@@ -513,7 +513,7 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
   Future<void> _enter() async {
     final uid = _uid;
     if (uid == null) return;
-    final x = .35 + _rnd.nextDouble() * .3, y = .62 + _rnd.nextDouble() * .14;
+    final x = .3 + _rnd.nextDouble() * .4, y = .52 + _rnd.nextDouble() * .14;
     _m[uid] = _Mover(.5, .95)
       ..tx = x
       ..ty = y;
@@ -609,7 +609,7 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
   }
 
   // 歩ける場所（画面の中の芝生と広場。上の建物と下のボタンにはかからない）
-  static const _minY = .44, _maxY = .8;
+  static const _minY = .46, _maxY = .7;
 
   void _tick(Duration now) {
     final dt = ((now - _last).inMicroseconds / 1e6).clamp(0.0, 0.05);
@@ -735,16 +735,16 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
     final now = DateTime.now();
     final top = MediaQuery.of(context).padding.top;
     return Scaffold(
-      backgroundColor: const Color(0xFF8FD068),
+      backgroundColor: const Color(0xFF83C55F),
       body: LayoutBuilder(builder: (context, c) {
         _size = c.biggest;
         final W = _size.width, H = _size.height;
         // 絵を近づける：建物が画面の上のほうに来るように
         final sc = W / 560;
         var left = W / 2 - s.ax * sc;
-        var topOff = H * .27 - s.ay * sc;
+        var topOff = H * .3 - s.ay * sc;
         left = left.clamp(W - _artW * sc, 0.0);
-        topOff = topOff.clamp(H - _artH * sc, 0.0);
+        topOff = math.min(topOff, 0.0); // 下の場所は、絵の下に芝生を足して、建物の位置をそろえる
         final uid = _uid;
         final order = _m.keys.toList()..sort((a, b) => _m[a]!.y.compareTo(_m[b]!.y));
         final byId = {for (final d in _docs) d.id: d};
@@ -761,6 +761,21 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
                   width: _artW * sc,
                   height: _artH * sc,
                   child: Image.asset(_art, fit: BoxFit.fill),
+                ),
+                // 下のほうは、ほかの建物が気にならないように、芝生の色でぼかす
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x0083C55F), Color(0x0083C55F), Color(0xF283C55F), Color(0xFF83C55F)],
+                          stops: [0, .62, .76, 1],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 Positioned.fill(child: IgnorePointer(child: ColoredBox(color: _tintOf(now)))),
                 for (final p in _paws)
