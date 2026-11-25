@@ -766,20 +766,26 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
             builder: (context, snap) {
               // 読みこみ中・読みこめないときも、イベントのカードはすぐ出す
               if (snap.hasError) {
-                return _center(Column(mainAxisSize: MainAxisSize.min, children: [
+                return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 16), children: [
                   _hero(0, const []),
+                  _toolRow(),
+                  ..._extras(const []),
                   const SizedBox(height: 14),
                   _retry('みんなの投稿を読みこめませんでした。電波のよいところで、もう一度ためしてください'),
-                ]));
+                ]);
               }
               if (!snap.hasData) {
-                return _center(Column(mainAxisSize: MainAxisSize.min, children: [
+                return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 16), children: [
                   _hero(0, const []),
+                  _toolRow(),
+                  ..._extras(const []),
                   const SizedBox(height: 14),
-                  _slow
-                      ? _retry('読みこみに時間がかかっています')
-                      : const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
-                ]));
+                  Center(
+                    child: _slow
+                        ? _retry('読みこみに時間がかかっています')
+                        : const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                  ),
+                ]);
               }
               _slowTimer?.cancel();
               return ValueListenableBuilder<Set<String>>(
