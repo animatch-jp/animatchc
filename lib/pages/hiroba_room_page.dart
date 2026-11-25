@@ -656,51 +656,37 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                 const SizedBox(height: 14),
                 _faces(people, uids),
                 const SizedBox(height: 14),
-                if (_isOpen)
-                  Row(children: [
-                    if (room.allowPhoto) ...[
-                      Expanded(
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: c2,
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          ),
-                          onPressed: _uploading ? null : _pickImage,
-                          icon: const Icon(Icons.photo_camera_rounded),
-                          label: const Text('写真で参加', style: TextStyle(fontWeight: FontWeight.w900)),
-                        ),
+                if (_isOpen) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: c2,
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
-                      const SizedBox(width: 8),
-                    ] else ...[
-                      Expanded(
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: c2,
-                            minimumSize: const Size.fromHeight(48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          ),
-                          onPressed: () => _focus.requestFocus(),
-                          icon: const Icon(Icons.edit_rounded),
-                          label: const Text('ひとことで参加', style: TextStyle(fontWeight: FontWeight.w900)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: c2,
-                          side: BorderSide(color: c2, width: 2),
-                          minimumSize: const Size.fromHeight(48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                        ),
-                        onPressed: _sending ? null : _showStamps,
-                        icon: const Icon(Icons.emoji_emotions_outlined),
-                        label: const Text('スタンプで参加', style: TextStyle(fontWeight: FontWeight.w900)),
-                      ),
+                      onPressed: room.allowPhoto ? (_uploading ? null : _pickImage) : () => _focus.requestFocus(),
+                      icon: Icon(room.allowPhoto ? Icons.photo_camera_rounded : Icons.edit_rounded),
+                      label: Text(room.allowPhoto ? '写真で参加する' : 'ひとことで参加する',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
                     ),
-                  ])
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: c2,
+                        side: BorderSide(color: c2, width: 2),
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+                      ),
+                      onPressed: _sending ? null : _showStamps,
+                      icon: const Icon(Icons.emoji_emotions_outlined),
+                      label: const Text('スタンプ1つで参加する', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ]
                 else
                   Text(_closedText, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
               ]),
