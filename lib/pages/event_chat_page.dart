@@ -1,3 +1,4 @@
+import 'event_extras.dart' show PetOwnerAvatar, PetOwnerName;
 import 'dart:async';
 import '../widgets/animaru_loading.dart';
 import '../services/content_filter.dart';
@@ -970,31 +971,12 @@ class _EventChatPageState extends State<EventChatPage> {
                                   );
                                 }
                               },
-                              child: ClipOval(
-                                child: data['senderImageUrl'] != null &&
-                                    (data['senderImageUrl'] as String)
-                                        .isNotEmpty
-                                    ? Image.network(data['senderImageUrl'],
-                                    width: 32,
-                                    height: 32,
-                                    fit: BoxFit.cover)
-                                    : Container(
-                                    width: 32,
-                                    height: 32,
-                                    color: const Color(0xFFFFE0D0),
-                                    child: Center(
-                                      child: Text(
-                                        (data['senderName'] ?? '🐾')
-                                            .toString()
-                                            .isNotEmpty
-                                            ? data['senderName'][0]
-                                            : '🐾',
-                                        style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Color(0xFFE8845A),
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    )),
+                              child: PetOwnerAvatar(
+                                uid: (data['senderUid'] as String?) ?? '',
+                                ownerImage: data['senderImageUrl'] as String?,
+                                letter: (data['senderName'] ?? '').toString().isNotEmpty
+                                    ? data['senderName'].toString()[0]
+                                    : '🐾',
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1007,11 +989,9 @@ class _EventChatPageState extends State<EventChatPage> {
                               if (!isMe)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
-                                  child: Text(
-                                      data['senderName'] as String? ?? '',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey[600])),
+                                  child: PetOwnerName(
+                                      uid: (data['senderUid'] as String?) ?? '',
+                                      owner: data['senderName'] as String? ?? ''),
                                 ),
                               GestureDetector(
                                 // 長押し：リアクション・ピン留め（主催者）・通報（ほかの人のメッセージ）

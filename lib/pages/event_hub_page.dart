@@ -447,8 +447,10 @@ class TodayFlyer extends StatelessWidget {
 
 // ── 会いに行く：会うイベントの掲示板 ──
 
+// 案内所（会いに行く）：11/25 作り直し。公園の絵の案内所を上に、しるしでしぼれる、大きなカード
 class MeetBoardPage extends StatefulWidget {
-  const MeetBoardPage({super.key});
+  const MeetBoardPage({super.key, this.preview = false});
+  final bool preview;
 
   @override
   State<MeetBoardPage> createState() => _MeetBoardPageState();
@@ -456,6 +458,8 @@ class MeetBoardPage extends StatefulWidget {
 
 class _MeetBoardPageState extends State<MeetBoardPage> {
   List<Map<String, dynamic>>? _events;
+  String _filter = 'すべて';
+  static const _filters = ['すべて', 'はじめて歓迎', '1人参加OK', '見学だけOK'];
 
   @override
   void initState() {
@@ -464,6 +468,14 @@ class _MeetBoardPageState extends State<MeetBoardPage> {
   }
 
   Future<void> _load() async {
+    if (widget.preview) {
+      _events = [
+        {'id': 'a', 'title': '朝のおさんぽ会（小型犬）', 'date': '12月6日（土）9:00', 'location': '河川敷の公園', 'tags': ['はじめて歓迎', '1人参加OK'], 'animal': '犬', 'participantCount': 4},
+        {'id': 'b', 'title': 'うさぎ飼いのお茶会（人だけ）', 'date': '12月7日（日）14:00', 'location': '駅前のカフェ', 'tags': ['見学だけOK'], 'animal': 'うさぎ', 'participantCount': 3},
+      ];
+      if (mounted) setState(() {});
+      return;
+    }
     try {
       _events = await loadMeetEvents(limit: 60);
     } catch (_) {
@@ -474,51 +486,205 @@ class _MeetBoardPageState extends State<MeetBoardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final list = (_events ?? const <Map<String, dynamic>>[])
+        .where((e) => _filter == 'すべて' || ((e['tags'] as List?)?.contains(_filter) ?? false))
+        .toList();
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: kCork,
-        foregroundColor: Colors.white,
-        title: const Text('会いに行く', style: TextStyle(fontWeight: FontWeight.w900)),
-      ),
-      body: CorkBoard(
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(padding: const EdgeInsets.fromLTRB(18, 22, 18, 40), children: [
-            PaperFlyer(
-              attach: FlyerAttach.tape,
-              angle: 1,
-              child: const Text(
-                'おさんぽ会や、同じ動物の人の会など、会って楽しむイベントです（18歳以上）。「はじめて歓迎」「1人参加OK」「見学だけOK」のしるしを目印にどうぞ。',
-                style: TextStyle(fontSize: 13, color: kInk, height: 1.5),
+      backgroundColor: const Color(0xFFFFFAF4),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 210,
+            backgroundColor: const Color(0xFF4CAF6E),
+            foregroundColor: Colors.white,
+            title: const Text('案内所', style: TextStyle(fontWeight: FontWeight.w900)),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Stack(fit: StackFit.expand, children: [
+                // 公園の絵の、案内所のあたり
+                ClipRect(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    alignment: const Alignment(.58, .55),
+                    child: SizedBox(
+                      width: 1200,
+                      height: 2400,
+                      child: Image.asset('assets/images/park.webp', fit: BoxFit.fill),
+                    ),
+                  ),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x66000000), Color(0x00000000), Color(0xAA000000)],
+                      stops: [0, .45, 1],
+                    ),
+                  ),
+                ),
+                const Positioned(
+                  left: 18,
+                  right: 18,
+                  bottom: 16,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('近くで会うイベント', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                    SizedBox(height: 2),
+                    Text('おさんぽ会や、同じ動物の人の会（18歳以上）',
+                        style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ]),
+                ),
+              ]),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 52,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                children: [
+                  for (final f in _filters)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(f),
+                        selected: _filter == f,
+                        onSelected: (_) => setState(() => _filter = f),
+                        selectedColor: const Color(0xFFFFE2D3),
+                      ),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            if (_events == null)
-              const Center(child: CircularProgressIndicator(color: Colors.white))
-            else if (_events!.isEmpty)
-              const Text('いま募集中の会うイベントはありません',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-            else
-              for (final e in _events!) MeetEventTile(event: e, onBack: _load),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kPaperWhite,
-                foregroundColor: kInk,
-                minimumSize: const Size.fromHeight(48),
-              ),
-              onPressed: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const EventPage()));
-                _load();
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('会うイベントを見る・ひらく'),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 40),
+            sliver: SliverList(
+              delegate: SliverChildListDelegate([
+                if (_events == null)
+                  const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()))
+                else if (list.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                    child: const Column(children: [
+                      Text('🗺️', style: TextStyle(fontSize: 40)),
+                      SizedBox(height: 6),
+                      Text('いま募集中の会はありません', style: TextStyle(fontWeight: FontWeight.w900, color: _brown)),
+                      SizedBox(height: 4),
+                      Text('18歳以上なら、下のボタンから会をひらけます', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                    ]),
+                  )
+                else
+                  for (final e in list) _bigCard(e),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: const Color(0xFFEFF6E9), borderRadius: BorderRadius.circular(16)),
+                  child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('🌿 はじめて会うときの気づかい', style: TextStyle(fontWeight: FontWeight.w900, color: _brown)),
+                    SizedBox(height: 6),
+                    Text('・人の多い、明るい場所で会いましょう\n・住所や電話番号は、会う前に教えなくて大丈夫です\n・動物の体調が悪い日は、無理せず休みましょう\n・こまったことがあれば、イベントの画面から通報できます',
+                        style: TextStyle(fontSize: 13, height: 1.6, color: _brown)),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 50,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _orange,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                    ),
+                    onPressed: widget.preview
+                        ? null
+                        : () async {
+                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const EventPage()));
+                            _load();
+                          },
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('会をひらく・くわしく見る', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  ),
+                ),
+              ]),
             ),
-          ]),
-        ),
+          ),
+        ]),
       ),
     );
   }
+
+  Widget _bigCard(Map<String, dynamic> e) {
+    final img = e['imageUrl'] as String?;
+    return Pressable(
+      onTap: widget.preview
+          ? () {}
+          : () async {
+              await Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => EventPage(initialEventId: e['id'] as String)));
+              _load();
+            },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 4))],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          AspectRatio(
+            aspectRatio: 16 / 7,
+            child: img != null && img.startsWith('https://')
+                ? Image.network(img, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _artCover())
+                : _artCover(),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(e['title'] as String? ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: _brown)),
+              const SizedBox(height: 6),
+              Row(children: [
+                const Icon(Icons.event_rounded, size: 15, color: _orange),
+                const SizedBox(width: 4),
+                Expanded(child: Text('${e['date'] ?? ''}', style: const TextStyle(fontSize: 12, color: _brown))),
+              ]),
+              const SizedBox(height: 2),
+              Row(children: [
+                const Icon(Icons.place_rounded, size: 15, color: _orange),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('${e['location'] ?? ''}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: _brown)),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: const Color(0xFFFFE9DE), borderRadius: BorderRadius.circular(10)),
+                  child: Text('${e['participantCount'] ?? 0}人参加',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: _orange)),
+                ),
+              ]),
+              eventTagChips(e, fontSize: 11),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // 写真のない会は、公園の絵の芝生
+  Widget _artCover() => ClipRect(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          alignment: const Alignment(0, .2),
+          child: SizedBox(width: 1200, height: 2400, child: Image.asset('assets/images/park.webp', fit: BoxFit.fill)),
+        ),
+      );
 }
 
 // 会うイベントの小さなカード（ハブとどうぶつ別の集まりで使う）

@@ -1131,3 +1131,88 @@ class LiveEventBanner extends StatelessWidget {
     );
   }
 }
+
+// ============================================================
+// チャットの中で、ペットの写真と飼い主をいっしょに出す
+// ============================================================
+
+final Map<String, Future<Map<String, dynamic>?>> _firstPets = {};
+
+Future<Map<String, dynamic>?> firstPetOf(String uid) => _firstPets.putIfAbsent(uid, () async {
+      try {
+        final q = await FirebaseFirestore.instance.collection('users').doc(uid).collection('pets').limit(1).get();
+        return q.docs.isEmpty ? null : q.docs.first.data();
+      } catch (_) {
+        return null;
+      }
+    });
+
+class PetOwnerAvatar extends StatelessWidget {
+  const PetOwnerAvatar({super.key, required this.uid, this.ownerImage, this.letter = '🐾', this.size = 36});
+  final String uid;
+  final String? ownerImage;
+  final String letter;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = ownerImage != null && ownerImage!.startsWith('https://') ? ownerImage : null;
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: firstPetOf(uid),
+      builder: (context, s) {
+        final pet = s.data?['imageUrl'];
+        final petImg = pet is String && pet.startsWith('https://') ? pet : null;
+        final main = petImg ?? owner;
+        return SizedBox(
+          width: size + 4,
+          height: size + 4,
+          child: Stack(clipBehavior: Clip.none, children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFFFE0D0),
+                image: main == null ? null : DecorationImage(image: NetworkImage(main), fit: BoxFit.cover),
+              ),
+              child: main == null
+                  ? Center(child: Text(letter, style: const TextStyle(fontSize: 14, color: Color(0xFFE8845A), fontWeight: FontWeight.bold)))
+                  : null,
+            ),
+            if (petImg != null && owner != null)
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  width: size * .48,
+                  height: size * .48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    image: DecorationImage(image: NetworkImage(owner), fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+          ]),
+        );
+      },
+    );
+  }
+}
+
+class PetOwnerName extends StatelessWidget {
+  const PetOwnerName({super.key, required this.uid, required this.owner});
+  final String uid, owner;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: firstPetOf(uid),
+      builder: (context, s) {
+        final pet = (s.data?['name'] as String?)?.trim() ?? '';
+        return Text(pet.isEmpty ? owner : '$owner・$petの飼い主',
+            maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: Colors.grey[600]));
+      },
+    );
+  }
+}
