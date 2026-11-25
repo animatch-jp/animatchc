@@ -468,7 +468,9 @@ class _OmikujiCardState extends State<OmikujiCard> with SingleTickerProviderStat
       title: '今日のおみくじ（うちの子の運勢）',
       emoji: '🎋',
       color: c,
-      child: AnimatedSwitcher(
+      child: SizedBox(
+        width: double.infinity,
+        child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 450),
         transitionBuilder: (child, a) => ScaleTransition(scale: CurvedAnimation(parent: a, curve: Curves.easeOutBack), child: child),
         child: !_open
@@ -518,6 +520,7 @@ class _OmikujiCardState extends State<OmikujiCard> with SingleTickerProviderStat
                 _bigButton('みんなに見せる', c, () => widget.onShare('今日のおみくじは「${f.$1}」でした🎋'),
                     icon: Icons.campaign_rounded, outlined: true),
               ]),
+        ),
       ),
     );
   }
