@@ -4,6 +4,7 @@
 // ・いちばん上にイベントのカードを大きく出す（11/25 社長「メインのイベントを大きく、真ん中に」）
 // ・長押しで「通報」「この人をブロック」。自分の投稿は「消す」
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -52,6 +53,8 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
   void initState() {
     super.initState();
     BlockedUsers.instance.ensureListening();
+    // 部屋を開くたびに、イベントのカードと参加している子は、ふわっと出す
+    _Appear.shown.removeWhere((k) => k.startsWith('hero_') || k.startsWith('face_'));
     _loadName();
   }
 
@@ -568,7 +571,11 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                         ]);
                       }
                       final d = docs[i - 1];
-                      return _post(d.id, d.data(), rank: _popular && i <= 3 ? i : null);
+                      return _Appear(
+                        id: 'post_${d.id}',
+                        delayMs: i <= 6 ? 120 + i * 70 : 0,
+                        child: _post(d.id, d.data(), rank: _popular && i <= 3 ? i : null),
+                      );
                     },
                   );
                 },
@@ -601,12 +608,15 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
       ]);
 
   // イベントのカード（いちばん大きく見せる）
-  Widget _hero(int people, List<String> uids) {
+  Widget _hero(int people, List<String> uids) => _Appear(id: 'hero_${room.id}', child: _heroCard(people, uids));
+
+  Widget _heroCard(int people, List<String> uids) {
     final c1 = room.colors.first, c2 = room.colors.last;
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: Stack(children: [
         Positioned.fill(child: FestiveBackdrop(colors: room.colors, style: room.style, seed: room.id.hashCode + 7)),
+        if (_isOpen) Positioned.fill(child: _Confetti(colors: room.colors)),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
@@ -618,7 +628,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
             ),
           ),
           child: Column(children: [
-            Text(room.emoji, style: const TextStyle(fontSize: 56)),
+            _Bob(child: Text(room.emoji, style: const TextStyle(fontSize: 56))),
             const SizedBox(height: 4),
             Text(room.name,
                 textAlign: TextAlign.center,
@@ -629,14 +639,14 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                   shadows: [Shadow(color: Color(0x55000000), blurRadius: 6)],
                 )),
             const SizedBox(height: 8),
-            Container(
+            (_isOpen ? (Widget c) => _Pulse(child: c) : (Widget c) => c)(Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: _isOpen ? const Color(0xFFE84A5F) : Colors.black26,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(_status, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
-            ),
+            )),
             const SizedBox(height: 14),
             Container(
               width: double.infinity,
@@ -711,7 +721,11 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
           for (var i = 0; i < show.length; i++)
             Positioned(
               left: 28.0 * i,
-              child: FutureBuilder<_Author?>(
+              child: _Appear(
+                id: 'face_${room.id}_${show[i]}',
+                delayMs: 250 + i * 90,
+                pop: true,
+                child: FutureBuilder<_Author?>(
                 future: _author(show[i]),
                 builder: (context, s) {
                   final img = s.data == null || s.data!.pets.isEmpty ? null : _okImg(s.data!.pets.first['imageUrl']);
@@ -727,6 +741,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                     child: img == null ? const Center(child: Text('🐾', style: TextStyle(fontSize: 16))) : null,
                   );
                 },
+              ),
               ),
             ),
         ]),
@@ -876,8 +891,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                 else if (text.isNotEmpty)
                   Text(text, style: const TextStyle(fontSize: 15, color: _brown, height: 1.5)),
               ]),
-              if (_pawBurst == id)
-                const IgnorePointer(child: Text('🐾', style: TextStyle(fontSize: 72))),
+              if (_pawBurst == id) const _PawBurst(),
             ]),
             const SizedBox(height: 8),
             Wrap(spacing: 6, runSpacing: 4, children: chips),
@@ -1060,3 +1074,201 @@ class _Author {
 }
 
 String? _okImg(dynamic u) => u is String && u.startsWith('https://') && u.length <= 600 ? u : null;
+
+// ---------- イベントの部屋の動き（11/25 社長「イベントにもっとアニメーションを」） ----------
+// 「動きを少なくする」設定の人には動かさない
+
+// ゆっくり上下にゆれる（イベントの絵）
+class _Bob extends StatefulWidget {
+  const _Bob({required this.child});
+  final Widget child;
+  @override
+  State<_Bob> createState() => _BobState();
+}
+
+class _BobState extends State<_Bob> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion(context)) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) {
+        final t = Curves.easeInOut.transform(_c.value);
+        return Transform.translate(
+          offset: Offset(0, -6 * t),
+          child: Transform.rotate(angle: (t - .5) * .12, child: child),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+// ふわっと大きくなったり小さくなったり（開催中の札）
+class _Pulse extends StatefulWidget {
+  const _Pulse({required this.child});
+  final Widget child;
+  @override
+  State<_Pulse> createState() => _PulseState();
+}
+
+class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion(context)) return widget.child;
+    return ScaleTransition(
+      scale: Tween(begin: 1.0, end: 1.08).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut)),
+      child: widget.child,
+    );
+  }
+}
+
+// 下からふわっと出てくる（カード・投稿・参加している子）。同じものは1回だけ
+class _Appear extends StatefulWidget {
+  const _Appear({required this.id, required this.child, this.delayMs = 0, this.pop = false});
+  final String id;
+  final Widget child;
+  final int delayMs;
+  final bool pop; // ぽんっと出る（顔の丸）
+  static final Set<String> shown = {};
+  @override
+  State<_Appear> createState() => _AppearState();
+}
+
+class _AppearState extends State<_Appear> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: Duration(milliseconds: widget.pop ? 420 : 520));
+  bool _skip = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _skip = _Appear.shown.contains(widget.id);
+    _Appear.shown.add(widget.id);
+    if (_skip) {
+      _c.value = 1;
+    } else {
+      Future.delayed(Duration(milliseconds: widget.delayMs), () {
+        if (mounted) _c.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_skip || reduceMotion(context)) return widget.child;
+    final a = CurvedAnimation(parent: _c, curve: widget.pop ? Curves.elasticOut : Curves.easeOutCubic);
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) => Opacity(
+        opacity: _c.value.clamp(0.0, 1.0),
+        child: widget.pop
+            ? Transform.scale(scale: .3 + .7 * a.value, child: child)
+            : Transform.translate(offset: Offset(0, 24 * (1 - a.value)), child: child),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+// イベントのカードの上に、紙ふぶきがゆっくり落ちる（開催中のときだけ）
+class _Confetti extends StatefulWidget {
+  const _Confetti({required this.colors});
+  final List<Color> colors;
+  @override
+  State<_Confetti> createState() => _ConfettiState();
+}
+
+class _ConfettiState extends State<_Confetti> with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(seconds: 9))..repeat();
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (reduceMotion(context)) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, __) => CustomPaint(painter: _ConfettiPainter(_c.value, widget.colors)),
+      ),
+    );
+  }
+}
+
+class _ConfettiPainter extends CustomPainter {
+  _ConfettiPainter(this.t, this.colors);
+  final double t;
+  final List<Color> colors;
+  static const _n = 22;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final palette = [...colors, const Color(0xFFFFD84D), const Color(0xFFFF8FB1), Colors.white];
+    for (var i = 0; i < _n; i++) {
+      final seed = (i * 7919) % 1000 / 1000;
+      final speed = .6 + seed * .8;
+      final y = ((t * speed + i / _n) % 1.0) * (size.height + 40) - 20;
+      final x = (seed * size.width + 18 * math.sin((t * 2 * math.pi * speed) + i)) % size.width;
+      final paint = Paint()..color = palette[i % palette.length].withValues(alpha: .85);
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(t * 2 * math.pi * (i.isEven ? 1 : -1) * speed);
+      if (i % 3 == 0) {
+        canvas.drawCircle(Offset.zero, 3.2, paint);
+      } else {
+        canvas.drawRRect(
+            RRect.fromRectAndRadius(const Rect.fromLTWH(-4, -2, 8, 4), const Radius.circular(1.5)), paint);
+      }
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ConfettiPainter old) => old.t != t;
+}
+
+// 2回タップで押した🐾が、ぽんっと大きくなって消える
+class _PawBurst extends StatelessWidget {
+  const _PawBurst();
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 650),
+        builder: (_, v, child) => Opacity(
+          opacity: v < .6 ? 1 : (1 - (v - .6) / .4).clamp(0.0, 1.0),
+          child: Transform.scale(scale: .4 + Curves.elasticOut.transform(math.min(v * 1.4, 1)) * .9, child: child),
+        ),
+        child: const Text('🐾', style: TextStyle(fontSize: 72)),
+      ),
+    );
+  }
+}
