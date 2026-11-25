@@ -539,24 +539,25 @@ class _MeetBoardPageState extends State<MeetBoardPage> {
             ),
           ),
           SliverToBoxAdapter(
-            child: SizedBox(
-              height: 52,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                children: [
-                  for (final f in _filters)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(f),
-                        selected: _filter == f,
-                        onSelected: (_) => setState(() => _filter = f),
-                        selectedColor: const Color(0xFFFFE2D3),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final f in _filters)
+                  Pressable(
+                    onTap: () => setState(() => _filter = f),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _filter == f ? _orange : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _filter == f ? _orange : const Color(0xFFE6DCD0)),
                       ),
+                      child: Text(f,
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w800, color: _filter == f ? Colors.white : _brown)),
                     ),
-                ],
-              ),
+                  ),
+              ]),
             ),
           ),
           SliverPadding(
