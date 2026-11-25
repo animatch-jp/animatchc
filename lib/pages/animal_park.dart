@@ -20,6 +20,7 @@ import '../services/blocked_users.dart';
 import '../services/content_filter.dart';
 import '../widgets/motion.dart';
 import 'animal_map_page.dart';
+import 'event_extras.dart' show evtAddRally, evtKey, BadgeShelf, myEvtStream, evtMap;
 import 'event_hub_page.dart' show AnimalGroupPage, MeetBoardPage;
 import 'hiroba_data.dart';
 import 'hiroba_room_page.dart';
@@ -517,6 +518,10 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
     _m[uid] = _Mover(.5, .95)
       ..tx = x
       ..ty = y;
+    // お祭りのあいだは、公園スタンプラリーのスタンプがたまる
+    for (final e in liveOnlineEvents(DateTime.now())) {
+      if (e.kind == 'fes') evtAddRally(evtKey(e.room), s.key);
+    }
     try {
       await _userDoc(uid).update({
         'park.at': s.key,
@@ -1069,6 +1074,16 @@ class _ParkScenePageState extends State<_ParkScenePage> with SingleTickerProvide
       const SizedBox(height: 4),
       Text('今日あいさつした子・あいさつしてくれた子が残ります。', style: TextStyle(fontSize: 13, color: Colors.grey[700])),
       const SizedBox(height: 10),
+      const SizedBox(height: 4),
+      const Text('🏅 参加バッジ', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _ink)),
+      const SizedBox(height: 8),
+      StreamBuilder<Map<String, dynamic>>(
+        stream: myEvtStream(),
+        builder: (context, snap) => BadgeShelf(badges: evtMap(snap.data ?? const {}, 'badges')),
+      ),
+      const SizedBox(height: 16),
+      const Text('👋 今日あいさつした子', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: _ink)),
+      const SizedBox(height: 4),
       if (_met.isEmpty)
         const Text('まだだれもいません。ほかの子を押して、あいさつしてみよう。')
       else

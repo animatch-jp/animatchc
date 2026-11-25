@@ -12,6 +12,7 @@ import 'dart:ui';
 import 'pages/hiroba_data.dart';
 import 'pages/hiroba_room_page.dart';
 import 'pages/animal_park.dart';
+import 'pages/event_extras.dart' show EventExtrasPreview;
 import 'pages/splash_page.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -107,7 +108,9 @@ class MyApp extends StatelessWidget {
           ? const AnimalParkPage(preview: true)
           : _preview == 'scene'
               ? const ParkScenePreview()
-              : _preview == 'room'
+              : _preview == 'extras'
+                  ? const EventExtrasPreview()
+                  : _preview == 'room'
                   ? HirobaRoomPage(room: liveOnlineEvents(DateTime.now()).isNotEmpty
                       ? liveOnlineEvents(DateTime.now()).first.room
                       : animalGroups.first.room)

@@ -15,6 +15,7 @@ import '../services/cloudinary_service.dart';
 import '../services/content_filter.dart';
 import '../widgets/festive_backdrop.dart';
 import '../widgets/motion.dart';
+import 'event_extras.dart';
 import 'hiroba_data.dart';
 import 'report_page.dart';
 
@@ -56,6 +57,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
     // 部屋を開くたびに、イベントのカードと参加している子は、ふわっと出す
     _Appear.shown.removeWhere((k) => k.startsWith('hero_') || k.startsWith('face_'));
     _loadName();
+    _initExtras();
   }
 
   Future<void> _loadName() async {
@@ -71,6 +73,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
   @override
   void dispose() {
     _slowTimer?.cancel();
+    _evtSub?.cancel();
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
@@ -112,6 +115,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
         if (image != null) 'imageUrl': image,
       });
       _lastPost = DateTime.now();
+      evtJoin(room);
       _ctrl.clear();
       _imageUrl = null;
       _focus.unfocus();
@@ -350,6 +354,269 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
     );
   }
 
+  // ---------- イベントで書きこむ以外にできること ----------
+
+  bool _photoTab = true; // 写真大会：写真の一覧／おしゃべり
+  late final OnlineEvent? _ev = eventOfRoom(room, DateTime.now());
+  StreamSubscription<Map<String, dynamic>>? _evtSub;
+  Map<String, dynamic> _evt = const {};
+  List<String> _doneUsers = const [];
+  List<String> _rsvpUsers = const [];
+  Map<String, dynamic>? _myPet;
+
+  String get _key => evtKey(room);
+  bool get _isFes => room.id.startsWith('fes_');
+
+  void _initExtras() {
+    _evtSub = myEvtStream().listen((e) {
+      if (mounted) setState(() => _evt = e);
+    }, onError: (e) => debugPrint('イベントの記録の読みこみエラー: $e'));
+    _loadCounts();
+    _loadMyPet();
+  }
+
+  Future<void> _loadMyPet() async {
+    final me = _me;
+    if (me == null) return;
+    try {
+      final q = await FirebaseFirestore.instance.collection('users').doc(me).collection('pets').limit(1).get();
+      if (q.docs.isNotEmpty && mounted) setState(() => _myPet = q.docs.first.data());
+    } catch (e) {
+      debugPrint('ペットの読みこみエラー: $e');
+    }
+  }
+
+  Future<void> _loadCounts() async {
+    if (room.id == 'challenge') {
+      final u = await evtUsers('done', _key);
+      if (mounted) setState(() => _doneUsers = u);
+    } else if (room.id == 'talk') {
+      final u = await evtUsers('rsvp', _key);
+      if (mounted) setState(() => _rsvpUsers = u);
+    }
+  }
+
+  Future<void> _doDone() async {
+    final me = _me;
+    if (me == null) return;
+    setState(() => _doneUsers = [..._doneUsers.where((u) => u != me), me]);
+    await evtSet(['done', _key], true);
+    await evtJoin(room);
+    if (!mounted) return;
+    showHappyBurst(context, message: 'やりました！', sub: 'みんなの合計に入りました', emoji: '🎉', color: room.colors.last);
+    _loadCounts();
+  }
+
+  Future<void> _toggleRsvp(bool now) async {
+    final me = _me;
+    if (me == null) return;
+    setState(() => _rsvpUsers = now ? _rsvpUsers.where((u) => u != me).toList() : [..._rsvpUsers, me]);
+    await evtSet(['rsvp', _key], !now);
+    if (!now) await evtJoin(room);
+    _loadCounts();
+  }
+
+  Widget _facesRow(List<String> uids) {
+    if (uids.isEmpty) return const SizedBox.shrink();
+    final show = uids.take(8).toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: SizedBox(
+        height: 34,
+        child: Stack(children: [
+          for (var i = 0; i < show.length; i++)
+            Positioned(
+              left: 24.0 * i,
+              child: _Appear(
+                id: 'face_${room.id}_x_${show[i]}',
+                delayMs: 150 + i * 70,
+                pop: true,
+                child: FutureBuilder<_Author?>(
+                  future: _author(show[i]),
+                  builder: (context, s) {
+                    final img = s.data == null || s.data!.pets.isEmpty ? null : _okImg(s.data!.pets.first['imageUrl']);
+                    return Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: room.colors.first.withValues(alpha: .2),
+                        border: Border.all(color: Colors.white, width: 2),
+                        image: img == null ? null : DecorationImage(image: NetworkImage(img), fit: BoxFit.cover),
+                      ),
+                      child: img == null ? const Center(child: Text('🐾', style: TextStyle(fontSize: 14))) : null,
+                    );
+                  },
+                ),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  List<Widget> _extras(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final ev = _ev;
+    final c = room.colors.last;
+    final out = <Widget>[];
+    if (room.id == 'challenge' && ev != null) {
+      out.add(ChallengeBoard(
+        count: _doneUsers.length,
+        goal: ev.goal ?? 100,
+        done: evtMap(_evt, 'done')[_key] == true,
+        onDone: _isOpen ? _doDone : null,
+        color: c,
+        faces: _facesRow(_doneUsers),
+        howTo: 'やったら「やった！」を押すだけ。書きこみはなくても大丈夫',
+      ));
+    }
+    if (room.id == 'talk' && ev != null) {
+      final rsvped = evtMap(_evt, 'rsvp')[_key] == true;
+      out.add(TalkBoard(
+        start: ev.start,
+        end: ev.end,
+        theme: ev.theme,
+        rsvpCount: _rsvpUsers.length,
+        rsvped: rsvped,
+        onRsvp: DateTime.now().isBefore(ev.end) ? () => _toggleRsvp(rsvped) : null,
+        onTopic: (t) {
+          _ctrl.text = t;
+          _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+          if (_isOpen) _focus.requestFocus();
+        },
+        color: c,
+        faces: _facesRow(_rsvpUsers),
+      ));
+    }
+    if (_isFes && ev != null) {
+      out.add(GoalBar(count: docs.length, goal: ev.goal ?? 100, color: c, label: 'みんなで${ev.goal ?? 100}こ集めよう'));
+      out.add(OmikujiCard(
+        drawnToday: _evt['omikuji'] == dayKey(DateTime.now()),
+        onDrawn: () {
+          evtSet(['omikuji'], dayKey(DateTime.now()));
+          evtJoin(room);
+        },
+        onShare: (t) => _send(t),
+        color: c,
+      ));
+      final rally = evtMap(_evt, 'rally')[_key];
+      out.add(RallyCard(have: rally is List ? rally.whereType<String>().toSet() : <String>{}, color: c));
+    }
+    if (room.id == 'photo') {
+      final top = _photoEntries(docs).where((p) => p.paws > 0).toList()..sort((a, b) => b.paws.compareTo(a.paws));
+      if (top.isNotEmpty) out.add(PhotoPodium(top: top.take(3).toList(), color: c, onOpen: _openPhoto));
+    }
+    return out;
+  }
+
+  // 記念写真・バッジ
+  Widget _toolRow() {
+    Widget tool(IconData icon, String label, VoidCallback onTap) => Expanded(
+          child: Pressable(
+            onTap: onTap,
+            child: Container(
+              height: 44,
+              margin: const EdgeInsets.only(top: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: room.colors.first.withValues(alpha: .4)),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, size: 18, color: room.colors.last),
+                const SizedBox(width: 6),
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w800, color: _brown, fontSize: 13)),
+              ]),
+            ),
+          ),
+        );
+    return Row(children: [
+      tool(Icons.photo_camera_back_rounded, '記念写真をつくる', () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => KeepsakeFramePage(
+              room: room,
+              petImageUrl: _okImg(_myPet?['imageUrl']),
+              petName: _myPet?['name'] as String?,
+            ),
+          ),
+        );
+      }),
+      const SizedBox(width: 8),
+      tool(Icons.military_tech_rounded, '参加バッジ ${evtMap(_evt, 'badges').length}', () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: const Color(0xFFFFFAF4),
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          builder: (_) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('🏅 参加バッジ', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _brown)),
+                const SizedBox(height: 4),
+                Text('参加したイベントのバッジが集まります', style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                const SizedBox(height: 14),
+                BadgeShelf(badges: evtMap(_evt, 'badges')),
+              ]),
+            ),
+          ),
+        );
+      }),
+    ]);
+  }
+
+  List<PhotoEntry> _photoEntries(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final me = _me;
+    final out = <PhotoEntry>[];
+    for (final d in docs) {
+      final m = d.data();
+      final url = _okImg(m['imageUrl']);
+      if (url == null) continue;
+      final paws = ((m['reactions'] as Map<String, dynamic>?)?['paw'] as List?) ?? const [];
+      out.add(PhotoEntry(
+        id: d.id,
+        url: url,
+        uid: (m['uid'] as String?) ?? '',
+        name: m['name'] == hiddenName ? hiddenName : ((m['name'] as String?) ?? ''),
+        paws: paws.length,
+        voted: paws.contains(me),
+      ));
+    }
+    return out;
+  }
+
+  void _openPhoto(PhotoEntry p) {
+    showDialog(
+      context: context,
+      builder: (dc) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          AspectRatio(aspectRatio: 4 / 5, child: Image.network(p.url, fit: BoxFit.cover)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(children: [
+              Expanded(
+                child: Text(p.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _brown)),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: p.voted ? Colors.grey : room.colors.last),
+                onPressed: () {
+                  Navigator.pop(dc);
+                  _toggleReaction(p.id, 'paw', p.voted);
+                },
+                icon: const Text('🐾'),
+                label: Text(p.voted ? '応援をやめる' : '応援する（${p.paws}）'),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
   // ---------- 書いた人（ペットの写真・飼い主のプロフィール） ----------
 
   static final Map<String, Future<_Author?>> _authors = {};
@@ -539,33 +806,52 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
                     if (u is String && !uids.contains(u) && d.data()['name'] != hiddenName) uids.add(u);
                   }
                   final people = docs.map((d) => d.data()['uid']).toSet().length;
-                  if (docs.isEmpty) {
+                  final extras = _extras(docs);
+                  if (docs.isEmpty && extras.isEmpty) {
                     // まだだれもいないときは、イベントのカードを画面のまん中に
                     return _center(Column(mainAxisSize: MainAxisSize.min, children: [
                       _hero(0, const []),
+                      _toolRow(),
                       const SizedBox(height: 14),
                       Text('まだだれも参加していません。いちばん乗りをどうぞ',
                           style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                     ]));
                   }
+                  final photos = room.id == 'photo' ? _photoEntries(docs) : const <PhotoEntry>[];
+                  final gallery = room.id == 'photo' && _photoTab;
                   return ListView.builder(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                    itemCount: docs.length + 1,
+                    itemCount: gallery ? 1 : docs.length + 1,
                     itemBuilder: (_, i) {
                       if (i == 0) {
                         return Column(children: [
                           _hero(people, uids),
-                          if (room.showPopular)
+                          _toolRow(),
+                          ...extras,
+                          if (room.id == 'photo')
                             Padding(
-                              padding: const EdgeInsets.only(top: 12),
+                              padding: const EdgeInsets.only(top: 14),
                               child: SegmentedButton<bool>(
                                 segments: const [
-                                  ButtonSegment(value: false, label: Text('新しい順')),
-                                  ButtonSegment(value: true, label: Text('スタンプの多い順')),
+                                  ButtonSegment(value: true, label: Text('写真の一覧'), icon: Icon(Icons.grid_view_rounded)),
+                                  ButtonSegment(value: false, label: Text('おしゃべり'), icon: Icon(Icons.forum_rounded)),
                                 ],
-                                selected: {_popular},
-                                onSelectionChanged: (v) => setState(() => _popular = v.first),
+                                selected: {_photoTab},
+                                onSelectionChanged: (v) => setState(() => _photoTab = v.first),
                               ),
+                            ),
+                          if (gallery)
+                            PhotoGrid(
+                              photos: photos,
+                              color: room.colors.last,
+                              onOpen: _openPhoto,
+                              onVote: (p) => _toggleReaction(p.id, 'paw', p.voted),
+                            ),
+                          if (!gallery && docs.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Text('まだだれも書いていません。いちばん乗りをどうぞ',
+                                  style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                             ),
                           const SizedBox(height: 6),
                         ]);
