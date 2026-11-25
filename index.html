@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/animatchc/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="動物好きのコミュニティアプリ">
+  <meta name="theme-color" content="#E8845A">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AniMatch">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>AniMatch</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+<script>
+  // 古い版が出ていたら、新しい版のリンクへ移る（テスト用のページだけ）
+  (function () {
+    var mine = "cb243a0";
+    try {
+      fetch("build.json?t=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.v || d.v === mine) return;
+          var u = new URL(location.href);
+          if (u.searchParams.get("v") === d.v) return;
+          u.searchParams.set("v", d.v);
+          location.replace(u.toString());
+        })
+        .catch(function () {});
+    } catch (e) {}
+  })();
+</script>
+
+  <script src="flutter_bootstrap.js?v=cb243a0" async></script>
+</body>
+</html>

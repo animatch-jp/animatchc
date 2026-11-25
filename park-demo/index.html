@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>どうぶつ公園（お試し）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* どうぶつ公園のお試し版。アプリに入れる前に、さわって決めるためのページ。
+   本物の公園の写真の上を、うちの子の写真アイコンが歩く。
+   芝生を押す → 歩く。ほかの子を押す → あいさつ・いっしょに歩く。
+   看板の場所に着く → その場所でできることが下から出る。 */
+:root{--ink:#2b2622;--paper:#fffaf4;--orange:#e8845a;--wood:#7a5236;--wood2:#a87a52;--ok:#3fb67a;--slow:#f4c430;--look:#9aa5b1}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#3c5a3a;font-family:"M PLUS Rounded 1c",system-ui,sans-serif;color:var(--ink);overscroll-behavior:none}
+#view{position:fixed;inset:0;overflow:hidden;touch-action:none}
+#world{position:absolute;left:0;top:0;background-size:cover;background-position:center;will-change:transform}
+#tint{position:absolute;inset:0;pointer-events:none;transition:background .8s}
+.lamp{position:absolute;width:220px;height:220px;margin:-110px 0 0 -110px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(255,226,150,.55),rgba(255,226,150,0) 65%);opacity:0;transition:opacity .8s}
+.night .lamp{opacity:1}
+.paw{position:absolute;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:rgba(255,255,255,.75);pointer-events:none;animation:fade 3s forwards}
+@keyframes fade{to{opacity:0;transform:scale(.4)}}
+.sign{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;cursor:pointer;z-index:2}
+.sign b{background:linear-gradient(var(--wood2),var(--wood));color:#fff6e6;font-size:12px;font-weight:800;padding:5px 9px;border-radius:7px;white-space:nowrap;box-shadow:0 2px 0 #4e321f,0 4px 10px rgba(0,0,0,.35)}
+.sign i{width:5px;height:16px;background:#4e321f;border-radius:0 0 2px 2px}
+.sign .live{position:absolute;top:-9px;right:-10px;background:#e84a5f;color:#fff;font-style:normal;font-size:10px;font-weight:800;padding:2px 6px;border-radius:9px;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{transform:scale(1.1)}}
+.pet{position:absolute;width:0;height:0;z-index:3;cursor:pointer}
+.pet .body{position:absolute;left:-26px;top:-58px;width:52px;height:52px;border-radius:50%;border:3px solid #fff;background:#eee center/cover;box-shadow:0 3px 8px rgba(0,0,0,.35)}
+.pet.me .body{border-color:var(--orange);width:58px;height:58px;left:-29px;top:-64px}
+.pet .shadow{position:absolute;left:-20px;top:-8px;width:40px;height:12px;border-radius:50%;background:rgba(0,0,0,.28);filter:blur(2px)}
+.pet.walking .body{animation:hop .36s infinite alternate ease-in-out}
+@keyframes hop{to{transform:translateY(-5px)}}
+.pet .rib{position:absolute;left:14px;top:-62px;width:16px;height:16px;border-radius:50%;border:2px solid #fff}
+.pet.me .rib{left:16px;top:-68px}
+.pet .nm{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-size:11px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);white-space:nowrap}
+.bub{position:absolute;left:50%;bottom:66px;transform:translateX(-50%);background:#fff;padding:6px 10px;border-radius:14px;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25);animation:pop .25s}
+.bub::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-top-color:#fff;border-bottom:0}
+@keyframes pop{from{transform:translateX(-50%) scale(.6);opacity:0}}
+.leash{position:absolute;height:0;border-top:2px dashed rgba(255,255,255,.85);transform-origin:0 0;pointer-events:none;z-index:2}
+#top{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 10px) 12px 0;display:flex;flex-direction:column;gap:8px;pointer-events:none;z-index:10}
+.bar{display:flex;align-items:center;gap:8px;pointer-events:auto}
+.pill{background:rgba(255,250,244,.94);border-radius:18px;padding:8px 12px;box-shadow:0 3px 12px rgba(0,0,0,.2);font-size:13px;font-weight:700}
+.title{flex:1}.title h1{margin:0;font-size:18px;font-weight:800}.title span{font-size:12px;color:#6b625b}
+.live-chip{display:flex;gap:6px;align-items:center;cursor:pointer;border:2px solid #e84a5f}
+.dot{width:8px;height:8px;border-radius:50%;background:#e84a5f;animation:pulse 1.6s infinite}
+button{font:inherit;border:0;cursor:pointer;color:inherit}
+.ibtn{width:40px;height:40px;border-radius:50%;background:rgba(255,250,244,.94);box-shadow:0 3px 12px rgba(0,0,0,.2);font-size:17px}
+#bottom{position:fixed;left:0;right:0;bottom:0;padding:0 12px calc(env(safe-area-inset-bottom) + 12px);z-index:10;display:flex;gap:8px;justify-content:center}
+.act{flex:1;max-width:130px;height:52px;border-radius:26px;background:rgba(255,250,244,.96);box-shadow:0 4px 14px rgba(0,0,0,.25);font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px}
+.act.main{background:var(--orange);color:#fff}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-radius:24px 24px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);box-shadow:0 -6px 30px rgba(0,0,0,.3);z-index:20;transform:translateY(105%);transition:transform .3s cubic-bezier(.2,.9,.3,1);max-height:78vh;overflow:auto}
+.sheet.open{transform:none}
+.sheet h2{margin:0 0 4px;font-size:19px}.sheet p{margin:4px 0 12px;font-size:13px;color:#6b625b;line-height:1.6}
+.grab{width:40px;height:5px;border-radius:3px;background:#ddd;margin:-6px auto 12px}
+.row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+.choice{flex:none;width:72px;text-align:center;font-size:11px;font-weight:700}
+.choice .ph{width:64px;height:64px;border-radius:50%;margin:0 auto 4px;background:#eee center/cover;border:3px solid transparent}
+.choice.sel .ph{border-color:var(--orange)}
+.rbtn{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:#f4efe8;border-radius:14px;padding:11px 12px;margin-bottom:8px;border:2px solid transparent}
+.rbtn.sel{border-color:var(--orange);background:#fff}
+.rbtn .c{width:18px;height:18px;border-radius:50%;flex:none}
+.rbtn small{display:block;font-size:12px;color:#6b625b;font-weight:500}
+.big{width:100%;height:54px;border-radius:27px;background:var(--orange);color:#fff;font-size:16px;font-weight:800;margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:#fff;border:2px solid #eadfd3;border-radius:20px;padding:9px 13px;font-size:14px;font-weight:700}
+.chip.on{border-color:var(--orange);color:var(--orange)}
+.who{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.who .ph{width:72px;height:72px;border-radius:50%;background:#eee center/cover;border:4px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:12px;margin-top:4px}
+.here{display:flex;gap:6px;margin:6px 0 12px}
+.here .ph{width:36px;height:36px;border-radius:50%;background:#eee center/cover;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.list a{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #eee;color:inherit;text-decoration:none;font-weight:700}
+.list .ph{width:44px;height:44px;border-radius:50%;background:#eee center/cover}
+.list small{display:block;font-weight:500;color:#6b625b;font-size:12px}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 110px);transform:translate(-50%,-20px);background:rgba(43,38,34,.92);color:#fff;padding:10px 16px;border-radius:20px;font-size:13px;font-weight:700;opacity:0;transition:.3s;z-index:30;pointer-events:none;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:15;display:none}
+#scrim.on{display:block}
+.demo{font-size:11px;color:#9a8f86;margin-top:10px;line-height:1.6}
+@media (prefers-reduced-motion:reduce){.pet.walking .body,.dot,.sign .live{animation:none}}
+</style>
+</head>
+<body>
+<div id="view"><div id="world"><div id="tint"></div></div></div>
+
+<div id="top">
+  <div class="bar">
+    <div class="pill title"><h1>どうぶつ公園</h1><span id="sub"></span></div>
+    <button class="ibtn" id="btnTime" aria-label="時間をかえる">🌙</button>
+    <button class="ibtn" id="btnBg" aria-label="背景をかえる">🖼️</button>
+  </div>
+  <div class="bar"><div class="pill live-chip" id="liveChip"><span class="dot"></span><span>いま開催中：写真大会（写真スポット）</span></div></div>
+</div>
+
+<div id="bottom">
+  <button class="act" id="btnSay">💬 ひとこと</button>
+  <button class="act main" id="btnGo">📍 行き先</button>
+  <button class="act" id="btnBook">📖 手帳 <span id="bookN">0</span></button>
+</div>
+
+<div id="scrim"></div>
+<div class="sheet" id="sheet"></div>
+<div id="toast"></div>
+
+<script>
+{
+const U=(id,w=1600)=>`https://images.unsplash.com/${id}?auto=format&fit=crop&w=${w}&q=70`;
+const P=id=>`https://images.unsplash.com/${id}?auto=format&fit=crop&crop=entropy&w=160&h=160&q=70`;
+// 背景の候補（Unsplash の写真）。どれが一番「本物の公園」に見えるか、社長にえらんでもらう
+const BGS=[
+  {id:'photo-1759750909584-b96825e93de8',by:'Maxim Nikiforov',n:'A 木かげの芝生'},
+  {id:'photo-1772553319854-f248ba64ed7d',by:'Frederick Adegoke Snr.',n:'B 空から見た公園'},
+  {id:'photo-1783139559099-516b459b6e93',by:'Nathan Sus',n:'C 小道のある野原'},
+  {id:'photo-1697394900698-8c88df19396f',by:'Luca J',n:'D 街の中の公園'},
+];
+const R={ok:{l:'あいさつOK',m:'あいさつしてくれたらうれしい',c:'var(--ok)'},slow:{l:'ゆっくりね',m:'黄色いリボン。少しずつ、そっとね',c:'var(--slow)'},look:{l:'見るだけ',m:'今日は見て回るだけ。あいさつは届きません',c:'var(--look)'}};
+// お試しの子たち（本物のアプリでは、今日公園に来た本物の子だけが出る）
+const DEMO=[
+  {n:'こむぎ',a:'柴犬',img:'photo-1704895598909-dd19e72fc3ae',r:'ok',by:'Léa Journiac',home:'dog'},
+  {n:'しろ',a:'柴犬',img:'photo-1704895594363-c530eae9e7be',r:'ok',by:'Léa Journiac',home:'dog'},
+  {n:'くるみ',a:'トイプードル',img:'photo-1522039553440-46d3e1e61e4a',r:'ok',by:'Thirteen .J',home:'photo'},
+  {n:'ぎん',a:'ねこ',img:'photo-1574158622682-e40e69881006',r:'ok',by:'Cédric VT',home:'cat'},
+  {n:'みかん',a:'ねこ',img:'photo-1611915387288-fd8d2f5f928b',r:'look',by:'Jan Kopřiva',home:'cat'},
+  {n:'もち',a:'うさぎ',img:'photo-1589933767411-38a58367efd7',r:'slow',by:'Andriyko Podilnyk',home:'rabbit'},
+  {n:'あずき',a:'うさぎ',img:'photo-1630535590772-ed554b4f4096',r:'ok',by:'Jacob Amson',home:'rabbit'},
+  {n:'ぴーちゃん',a:'セキセイインコ',img:'photo-1594911588637-c9e891bd7858',r:'ok',by:'Tawhid Khan',home:'bird'},
+  {n:'だいず',a:'ハムスター',img:'photo-1721327900411-b315dce4388e',r:'ok',by:'Zhaoli JIN',home:'photo'},
+];
+// 公園の場所（看板）。x,y は公園全体の中の位置（0〜1）
+const PLACES={
+  photo:{n:'写真スポット',x:.5,y:.3,live:'開催中',d:'いま「写真大会」をやっています。今日のお題は「秋のおさんぽ」。',btn:['写真大会に出す','みんなの写真']},
+  bench:{n:'ベンチ',x:.78,y:.5,live:'20時〜',d:'夜8時から「話しあい会」。飼い方のことを、ベンチでゆっくり話します。',btn:['話しあい会に入る']},
+  tent:{n:'お悩み相談テント',x:.22,y:.46,d:'飼い方で困ったことを、先輩の飼い主さんに聞けます。',btn:['相談テントに入る']},
+  dog:{n:'ドッグラン',x:.25,y:.14,d:'犬の子たちの場所。走り回るのが好きな子はここ。',btn:['犬の部屋で話す','犬の会']},
+  cat:{n:'ねこの日だまり',x:.8,y:.16,d:'ねこの子たちの場所。日なたでのんびり。',btn:['ねこの部屋で話す','ねこの会']},
+  rabbit:{n:'うさぎの芝',x:.2,y:.72,d:'うさぎの子たちの場所。移動や温度の変化が苦手な子が多いので、会う会は「人だけ」がおすすめです。',btn:['うさぎの部屋で話す','うさぎの会']},
+  bird:{n:'小鳥の木かげ',x:.82,y:.74,d:'鳥の子たちの場所。',btn:['鳥の部屋で話す','鳥の会']},
+  org:{n:'保護団体のテント',x:.5,y:.58,d:'保護団体の人たちのテント。新しい家族をさがしている子に会えます。',btn:['保護団体を見る']},
+  info:{n:'案内所',x:.55,y:.86,d:'近くで会うイベント（18歳以上）をさがしたり、ひらいたりできます。',btn:['会うイベントを見る']},
+};
+const SAY=['こんにちは🐾','いい天気だね','かわいいね','おさんぽ中','なかよくしてね','またね👋'];
+const REPLY=['こんにちは🐾','ありがとう！','なかよくしてね','いっしょに歩こ','またね👋'];
+const $=s=>document.querySelector(s);
+const view=$('#view'),world=$('#world'),tint=$('#tint');
+let W,H,cam={x:0,y:0},bgI=0,timeI=0,me=null,pets=[],met=new Map(),follow=null,arrived=null;
+const TIMES=[{n:'朝',i:'🌅',t:'rgba(255,220,170,.12)'},{n:'昼',i:'☀️',t:'rgba(0,0,0,0)'},{n:'夕方',i:'🌇',t:'rgba(255,120,60,.28)'},{n:'夜',i:'🌙',t:'rgba(15,25,70,.55)'}];
+const h=new Date().getHours();timeI=h>=5&&h<10?0:h<16?1:h<18?2:3;
+
+function size(){const vw=innerWidth,vh=innerHeight;W=Math.max(vw*1.7,700);H=Math.max(vh*1.8,1300);world.style.width=W+'px';world.style.height=H+'px';clampCam();}
+function clampCam(){cam.x=Math.min(0,Math.max(innerWidth-W,cam.x));cam.y=Math.min(0,Math.max(innerHeight-H,cam.y));world.style.transform=`translate(${cam.x}px,${cam.y}px)`;}
+function setBg(){world.style.backgroundImage=`url(${U(BGS[bgI].id)})`;}
+function setTime(){const t=TIMES[timeI];tint.style.background=t.t;view.classList.toggle('night',timeI===3);$('#btnTime').textContent=t.i;sub();}
+function sub(){$('#sub').textContent=`秋の${TIMES[timeI].n}・いま ${pets.length+(me?1:0)}匹が来ています`;}
+function toast(s){const t=$('#toast');t.textContent=s;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2600);}
+
+// 看板と街灯
+for(const [k,p] of Object.entries(PLACES)){const el=document.createElement('div');el.className='sign';el.style.left=p.x*100+'%';el.style.top=p.y*100+'%';el.innerHTML=`<b>${p.n}</b><i></i>${p.live?`<em class="live">${p.live}</em>`:''}`;el.onclick=e=>{e.stopPropagation();goTo(k)};world.appendChild(el);}
+for(const [x,y] of [[.38,.4],[.65,.42],[.35,.7],[.68,.72],[.5,.85],[.5,.18]]){const l=document.createElement('div');l.className='lamp';l.style.left=x*100+'%';l.style.top=y*100+'%';world.appendChild(l);}
+
+function makePet(d,isMe){const el=document.createElement('div');el.className='pet'+(isMe?' me':'');el.innerHTML=`<div class="shadow"></div><div class="body" style="background-image:url(${d.src||P(d.img)})"></div><div class="rib" style="background:${R[d.r].c}"></div><div class="nm">${isMe?'うちの子':d.n}</div>`;world.appendChild(el);const o={...d,el,x:0,y:0,tx:0,ty:0,wait:0,me:isMe};if(!isMe)el.onclick=e=>{e.stopPropagation();openPet(o)};return o;}
+function place(o){o.el.style.left=o.x+'px';o.el.style.top=o.y+'px';o.el.style.zIndex=3+Math.round(o.y);}
+function say(o,s){o.el.querySelector('.bub')?.remove();const b=document.createElement('div');b.className='bub';b.textContent=s;o.el.appendChild(b);clearTimeout(o._b);o._b=setTimeout(()=>b.remove(),3800);}
+function near(k,j=.06){const p=PLACES[k];return{x:(p.x+(Math.random()-.5)*j*2)*W,y:(p.y+.05+Math.random()*j)*H};}
+
+// うちの子が歩く・ほかの子が歩く
+let last=performance.now(),pawT=0;
+function step(now){const dt=Math.min(.05,(now-last)/1000);last=now;
+  for(const o of [me,...pets]){if(!o)continue;
+    if(o===follow){o.tx=me.x+34;o.ty=me.y+16;}
+    const dx=o.tx-o.x,dy=o.ty-o.y,d=Math.hypot(dx,dy),sp=o.me?95:(o===follow?110:38);
+    if(d>2){const s=Math.min(d,sp*dt);o.x+=dx/d*s;o.y+=dy/d*s;o.el.classList.add('walking');
+      if(o.me){pawT+=s;if(pawT>22){pawT=0;const p=document.createElement('div');p.className='paw';p.style.left=o.x+'px';p.style.top=o.y-4+'px';world.appendChild(p);setTimeout(()=>p.remove(),3000);}}
+    }else{o.el.classList.remove('walking');
+      if(!o.me&&o!==follow){o.wait-=dt;if(o.wait<=0){const t=Math.random()<.7?near(o.home,.07):{x:(.1+Math.random()*.8)*W,y:(.12+Math.random()*.78)*H};o.tx=t.x;o.ty=t.y;o.wait=3+Math.random()*6;}}
+      if(o.me&&o._goal){const g=o._goal;o._goal=null;arrive(g);}
+    }
+    place(o);}
+  if(follow){const l=$('#leash');if(l){const dx=follow.x-me.x,dy=follow.y-me.y;l.style.left=me.x+'px';l.style.top=me.y-30+'px';l.style.width=Math.hypot(dx,dy)+'px';l.style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;}}
+  if(me&&me.el.classList.contains('walking')&&!drag){const tx=innerWidth/2-me.x,ty=innerHeight*.55-me.y;cam.x+=(tx-cam.x)*.06;cam.y+=(ty-cam.y)*.06;clampCam();}
+  requestAnimationFrame(step);}
+
+// ほかの子のおしゃべり（ときどき）と、近くに来たらあいさつしてくれる
+setInterval(()=>{const o=pets[Math.floor(Math.random()*pets.length)];if(!o||o.r==='look')return;
+  if(me&&o.r==='ok'&&Math.hypot(o.x-me.x,o.y-me.y)<130&&!met.has(o.n)){say(o,'こんにちは🐾');toast(`${o.n}があいさつしてくれました（押すと、かえせます）`);return;}
+  if(Math.random()<.5)say(o,['いい天気だね','おさんぽ中','🐾','ねむい…','写真大会でた？'][Math.floor(Math.random()*5)]);},2600);
+
+// さわる：ドラッグで見回す、タップでそこへ歩く
+let drag=null;
+view.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:false};});
+view.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>8)drag.moved=true;if(drag.moved){cam.x=drag.cx+dx;cam.y=drag.cy+dy;clampCam();}});
+view.addEventListener('pointerup',e=>{const d=drag;drag=null;if(!d||d.moved||!me)return;if(e.target.closest('.pet,.sign'))return;me.tx=e.clientX-cam.x;me.ty=e.clientY-cam.y;me._goal=null;closeSheet();});
+
+// 下から出る紙
+const sheet=$('#sheet'),scrim=$('#scrim');
+function openSheet(html,modal=true){sheet.innerHTML='<div class="grab"></div>'+html;sheet.classList.add('open');scrim.classList.toggle('on',modal);}
+function closeSheet(){sheet.classList.remove('open');scrim.classList.remove('on');}
+scrim.onclick=()=>{if(me)closeSheet();};
+
+// 受付
+let pick={i:0,r:'ok',src:null};
+const MINE=[{n:'こむぎ',a:'柴犬',img:'photo-1704895598909-dd19e72fc3ae'},{n:'ぎん',a:'ねこ',img:'photo-1574158622682-e40e69881006'},{n:'あずき',a:'うさぎ',img:'photo-1630535590772-ed554b4f4096'}];
+function reception(){openSheet(`<h2>🎫 受付</h2><p>名札に出るのは、うちの子の名前・写真・リボンだけです。</p>
+<b style="font-size:14px">いっしょに行く子</b><div class="row" style="margin:8px 0 12px">${MINE.map((m,i)=>`<button class="choice ${pick.i===i&&!pick.src?'sel':''}" data-i="${i}"><div class="ph" style="background-image:url(${P(m.img)})"></div>${m.a}</button>`).join('')}<label class="choice ${pick.src?'sel':''}"><div class="ph" style="${pick.src?`background-image:url(${pick.src})`:'display:grid;place-items:center;font-size:24px'}">${pick.src?'':'📷'}</div>自分の写真<input type="file" accept="image/*" id="file" hidden></label></div>
+<b style="font-size:14px">今日のリボン</b><div style="margin-top:8px">${Object.entries(R).map(([k,r])=>`<button class="rbtn ${pick.r===k?'sel':''}" data-r="${k}"><span class="c" style="background:${r.c}"></span><span>${r.l}<small>${r.m}</small></span></button>`).join('')}</div>
+<button class="big" id="enter">名札をつけて入る</button><div class="demo">これはお試しです。ほかの子は見本の写真で、勝手に動いています。本物のアプリでは、今日来た本物の子だけが出ます。</div>`,true);
+  sheet.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{pick.i=+b.dataset.i;pick.src=null;reception();});
+  sheet.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{pick.r=b.dataset.r;reception();});
+  $('#file').onchange=e=>{const f=e.target.files[0];if(f){pick.src=URL.createObjectURL(f);reception();}};
+  $('#enter').onclick=()=>{const m=MINE[pick.i];if(me){me.el.remove();}
+    me=makePet({n:pick.src?'うちの子':m.n,a:m.a,img:m.img,src:pick.src,r:pick.r},true);me.x=me.tx=.5*W;me.y=me.ty=H-30;place(me);me.tx=.5*W;me.ty=.8*H;
+    closeSheet();sub();toast('公園に入りました。芝生を押すと、そこまで歩きます');};}
+
+// ほかの子の名札
+function openPet(o){const r=R[o.r],n=met.get(o.n)||0;
+  openSheet(`<div class="who"><div class="ph" style="background-image:url(${P(o.img)});border-color:${r.c}"></div><div><h2>${o.n}</h2><div style="font-size:13px;color:#6b625b">${o.a}${n?`・今日 ${n}回あいさつ`:''}</div><span class="tag" style="background:${r.c};color:${o.r==='slow'?'#5a4500':'#fff'}">🎀 ${r.l}</span></div></div>
+  <p>${r.m}</p>
+  ${!me?'<p>先に受付で名札をつけてください。</p>':o.r==='look'?'<p>今日は見て回るだけの日です。そっと見守ってね。</p>':`<b style="font-size:14px">あいさつを送る</b><div class="chips" style="margin:8px 0 14px">${SAY.map(s=>`<button class="chip" data-s="${s}">${s}</button>`).join('')}</div>
+  ${o.r==='ok'?`<button class="big" id="walk" style="background:${follow===o?'#6b625b':'var(--orange)'}">${follow===o?'いっしょに歩くのをやめる':'🐾 いっしょに歩く'}</button>`:'<p style="margin:0">黄色いリボンの子とは、あいさつだけにしましょう。</p>'}`}
+  <button class="chip" style="margin-top:12px;font-size:12px;color:#9a8f86;border:0">通報する</button>`,true);
+  sheet.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{closeSheet();me.tx=o.x-46;me.ty=o.y+10;say(me,b.dataset.s);
+    setTimeout(()=>{say(o,REPLY[Math.floor(Math.random()*REPLY.length)]);const first=!met.has(o.n);met.set(o.n,(met.get(o.n)||0)+1);$('#bookN').textContent=met.size;if(first)toast(`${o.n}が手帳に入りました📖`);},1300);});
+  const w=$('#walk');if(w)w.onclick=()=>{closeSheet();$('#leash')?.remove();if(follow===o){follow=null;say(o,'またね👋');return;}
+    follow=o;const l=document.createElement('div');l.className='leash';l.id='leash';world.appendChild(l);say(o,'いっしょに歩こ🐾');if(!met.has(o.n)){met.set(o.n,1);$('#bookN').textContent=met.size;}toast(`${o.n}といっしょに歩いています`);};}
+
+// 行き先・着いたとき
+function goTo(k){if(!me){reception();return;}const t=near(k,.02);me.tx=t.x;me.ty=t.y;me._goal=k;closeSheet();}
+function arrive(k){const p=PLACES[k],here=pets.filter(o=>Math.hypot(o.x-PLACES[k].x*W,o.y-PLACES[k].y*H)<170);
+  openSheet(`<h2>${p.n}に着きました</h2><p>${p.d}</p>${here.length?`<b style="font-size:13px">ここにいる子 ${here.length}匹</b><div class="here">${here.map(o=>`<div class="ph" style="background-image:url(${P(o.img)})"></div>`).join('')}</div>`:'<p>いまは、だれもいません。</p>'}
+  <div style="display:flex;gap:8px">${p.btn.map((b,i)=>`<button class="big" style="flex:1;height:48px;font-size:14px;margin:0;${i?'background:#fff;color:var(--orange);border:2px solid var(--orange)':''}" data-b="${b}">${b}</button>`).join('')}</div>`,false);
+  sheet.querySelectorAll('[data-b]').forEach(b=>b.onclick=()=>toast(`アプリでは、ここから「${b.dataset.b}」に入ります`));}
+$('#btnGo').onclick=()=>openSheet(`<h2>📍 どこへ行く？</h2><div class="list">${Object.entries(PLACES).map(([k,p])=>`<a href="#" data-k="${k}"><span style="font-size:22px">🪧</span><span>${p.n}${p.live?` <em style="color:#e84a5f;font-style:normal;font-size:12px">${p.live}</em>`:''}<small>${p.d.slice(0,26)}…</small></span></a>`).join('')}</div>`);
+sheet.addEventListener('click',e=>{const a=e.target.closest('[data-k]');if(a){e.preventDefault();goTo(a.dataset.k);}});
+$('#liveChip').onclick=()=>goTo('photo');
+$('#btnSay').onclick=()=>{if(!me){reception();return;}openSheet(`<h2>💬 ひとこと</h2><p>うちの子の頭の上に出ます。公園にいるみんなに見えます。</p><div class="chips">${SAY.map(s=>`<button class="chip" data-s="${s}">${s}</button>`).join('')}</div>`);sheet.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{say(me,b.dataset.s);closeSheet();});};
+$('#btnBook').onclick=()=>openSheet(`<h2>📖 公園の手帳</h2><p>今日あいさつした子が残ります。また会うと、回数がふえます。</p>${met.size?`<div class="list">${[...met].map(([n,c])=>{const o=pets.find(p=>p.n===n);return`<a href="#"><div class="ph" style="background-image:url(${P(o.img)})"></div><span>${n}<small>${o.a}・今日 ${c}回</small></span></a>`}).join('')}</div>`:'<p>まだだれもいません。ほかの子を押して、あいさつしてみよう。</p>'}`);
+$('#btnTime').onclick=()=>{timeI=(timeI+1)%4;setTime();toast(`${TIMES[timeI].n}の公園（お試しで切りかえ）`);};
+$('#btnBg').onclick=()=>{bgI=(bgI+1)%BGS.length;setBg();toast(`背景 ${BGS[bgI].n}（写真：${BGS[bgI].by} / Unsplash）`);};
+
+// はじめ
+size();setBg();
+pets=DEMO.map(d=>{const o=makePet(d,false);const t=near(d.home,.08);o.x=o.tx=t.x;o.y=o.ty=t.y;o.wait=Math.random()*4;place(o);return o;});
+// 写真大会のところには、何匹か集まっている
+for(const o of pets.slice(2,5)){const t=near('photo',.04);o.x=o.tx=t.x;o.y=o.ty=t.y;o.wait=8;place(o);}
+setTime();cam.x=innerWidth/2-W/2;cam.y=innerHeight-H;clampCam();
+addEventListener('resize',size);
+requestAnimationFrame(step);reception();
+}
+</script>
+</body>
+</html>
