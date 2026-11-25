@@ -9,6 +9,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'dart:ui';
+import 'pages/hiroba_data.dart';
+import 'pages/hiroba_room_page.dart';
 import 'pages/animal_park.dart';
 import 'pages/splash_page.dart';
 
@@ -105,7 +107,11 @@ class MyApp extends StatelessWidget {
           ? const AnimalParkPage(preview: true)
           : _preview == 'scene'
               ? const ParkScenePreview()
-              : const SplashPage(),
+              : _preview == 'room'
+                  ? HirobaRoomPage(room: liveOnlineEvents(DateTime.now()).isNotEmpty
+                      ? liveOnlineEvents(DateTime.now()).first.room
+                      : animalGroups.first.room)
+                  : const SplashPage(),
     );
   }
 }

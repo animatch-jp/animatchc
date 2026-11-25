@@ -1,7 +1,10 @@
 // イベントの部屋（アプリの中のイベント・どうぶつ別の部屋）：ひとこと・写真・スタンプで参加する場所
 // ・入っても、だれにも知らされない（見るだけでもよい）
-// ・名前を押してもプロフィールは開かない（ここから 1対1 のメッセージは送れない）
+// ・書いた人のペットの写真と飼い主の名前を出す。押すと、プロフィール（名前・ひとこと・ペット）だけ見られる（ここから 1対1 のメッセージは送れない）
+// ・いちばん上にイベントのカードを大きく出す（11/25 社長「メインのイベントを大きく、真ん中に」）
 // ・長押しで「通報」「この人をブロック」。自分の投稿は「消す」
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -64,6 +67,7 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
 
   @override
   void dispose() {
+    _slowTimer?.cancel();
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
@@ -343,9 +347,135 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
     );
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _stream => room.span == null
-      ? _col.orderBy('createdAt', descending: true).limit(80).snapshots()
-      : _col.where('span', isEqualTo: room.span).limit(300).snapshots();
+  // ---------- 書いた人（ペットの写真・飼い主のプロフィール） ----------
+
+  static final Map<String, Future<_Author?>> _authors = {};
+
+  Future<_Author?> _author(String uid) => _authors.putIfAbsent(uid, () async {
+        try {
+          final db = FirebaseFirestore.instance;
+          final u = await db.collection('users').doc(uid).get();
+          final p = await db.collection('users').doc(uid).collection('pets').limit(4).get();
+          final d = u.data() ?? const <String, dynamic>{};
+          return _Author(
+            name: ((d['name'] as String?) ?? '').trim(),
+            icon: _okImg(d['profileImageUrl']),
+            motto: ((d['motto'] as String?) ?? '').trim(),
+            pets: p.docs.map((e) => e.data()).toList(),
+          );
+        } catch (e) {
+          debugPrint('書いた人を読みこめませんでした: $e');
+          return null;
+        }
+      });
+
+  void _showAuthor(String uid, _Author a) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFFFFFAF4),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: room.colors.first.withValues(alpha: .2),
+                backgroundImage: a.icon == null ? null : NetworkImage(a.icon!),
+                child: a.icon == null ? const Icon(Icons.person, color: _brown) : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(a.name.isEmpty ? '名無しさん' : a.name,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _brown)),
+                  if (a.motto.isNotEmpty)
+                    Text(a.motto, style: TextStyle(fontSize: 13, color: Colors.grey[700])),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 16),
+            const Text('いっしょに暮らしている子', style: TextStyle(fontWeight: FontWeight.w800, color: _brown)),
+            const SizedBox(height: 10),
+            if (a.pets.isEmpty)
+              Text('まだ登録されていません', style: TextStyle(color: Colors.grey[600]))
+            else
+              SizedBox(
+                height: 112,
+                child: ListView(scrollDirection: Axis.horizontal, children: [
+                  for (final p in a.pets)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: SizedBox(
+                        width: 84,
+                        child: Column(children: [
+                          Container(
+                            width: 76,
+                            height: 76,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: room.colors.first.withValues(alpha: .15),
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 6, offset: Offset(0, 2))],
+                              image: _okImg(p['imageUrl']) == null
+                                  ? null
+                                  : DecorationImage(image: NetworkImage(_okImg(p['imageUrl'])!), fit: BoxFit.cover),
+                            ),
+                            child: _okImg(p['imageUrl']) == null
+                                ? const Center(child: Text('🐾', style: TextStyle(fontSize: 28)))
+                                : null,
+                          ),
+                          const SizedBox(height: 4),
+                          Text((p['name'] as String?) ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _brown)),
+                          Text((p['type'] as String?) ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                        ]),
+                      ),
+                    ),
+                ]),
+              ),
+            const SizedBox(height: 6),
+            Text('イベントの中では、プロフィールを見ることだけができます', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ---------- 画面 ----------
+
+  late Stream<QuerySnapshot<Map<String, dynamic>>> _streamObj = _makeStream();
+  Timer? _slowTimer;
+  bool _slow = false;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _makeStream() {
+    _slowTimer?.cancel();
+    _slow = false;
+    _slowTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) setState(() => _slow = true);
+    });
+    return room.span == null
+        ? _col.orderBy('createdAt', descending: true).limit(80).snapshots()
+        : _col.where('span', isEqualTo: room.span).limit(300).snapshots();
+  }
+
+  String get _status {
+    final now = DateTime.now();
+    final o = room.opensAt, c = room.closesAt;
+    if (o != null && now.isBefore(o)) return '${whenText(o)}から';
+    if (c != null && !now.isBefore(c)) return '終わりました（読むことはできます）';
+    if (c != null) {
+      final left = c.difference(now);
+      return left.inHours >= 1 ? '開催中・あと${left.inHours}時間' : '開催中・あと${left.inMinutes + 1}分';
+    }
+    return '開催中';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -360,22 +490,414 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
       ),
       body: Column(children: [
-        _promptBanner(),
-        if (room.showPopular)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('新しい順')),
-                ButtonSegment(value: true, label: Text('スタンプの多い順')),
-              ],
-              selected: {_popular},
-              onSelectionChanged: (v) => setState(() => _popular = v.first),
-            ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _streamObj,
+            builder: (context, snap) {
+              // 読みこみ中・読みこめないときも、イベントのカードはすぐ出す
+              if (snap.hasError) {
+                return _center(Column(mainAxisSize: MainAxisSize.min, children: [
+                  _hero(0, const []),
+                  const SizedBox(height: 14),
+                  _retry('みんなの投稿を読みこめませんでした。電波のよいところで、もう一度ためしてください'),
+                ]));
+              }
+              if (!snap.hasData) {
+                return _center(Column(mainAxisSize: MainAxisSize.min, children: [
+                  _hero(0, const []),
+                  const SizedBox(height: 14),
+                  _slow
+                      ? _retry('読みこみに時間がかかっています')
+                      : const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                ]));
+              }
+              _slowTimer?.cancel();
+              return ValueListenableBuilder<Set<String>>(
+                valueListenable: BlockedUsers.instance.ids,
+                builder: (context, blocked, _) {
+                  final docs = snap.data!.docs.where((d) => !blocked.contains(d.data()['uid'])).toList();
+                  int ms(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+                    final t = d.data()['createdAt'];
+                    return t is Timestamp ? t.millisecondsSinceEpoch : 8640000000000000;
+                  }
+
+                  docs.sort((a, b) => ms(b).compareTo(ms(a)));
+                  if (_popular) {
+                    int score(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+                      final r = (d.data()['reactions'] as Map<String, dynamic>?) ?? const {};
+                      return r.values.fold<int>(0, (n, v) => n + ((v as List?)?.length ?? 0));
+                    }
+
+                    docs.sort((a, b) => score(b).compareTo(score(a)));
+                  }
+                  final uids = <String>[];
+                  for (final d in docs) {
+                    final u = d.data()['uid'];
+                    if (u is String && !uids.contains(u) && d.data()['name'] != hiddenName) uids.add(u);
+                  }
+                  final people = docs.map((d) => d.data()['uid']).toSet().length;
+                  if (docs.isEmpty) {
+                    // まだだれもいないときは、イベントのカードを画面のまん中に
+                    return _center(Column(mainAxisSize: MainAxisSize.min, children: [
+                      _hero(0, const []),
+                      const SizedBox(height: 14),
+                      Text('まだだれも参加していません。いちばん乗りをどうぞ',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                    ]));
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                    itemCount: docs.length + 1,
+                    itemBuilder: (_, i) {
+                      if (i == 0) {
+                        return Column(children: [
+                          _hero(people, uids),
+                          if (room.showPopular)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: SegmentedButton<bool>(
+                                segments: const [
+                                  ButtonSegment(value: false, label: Text('新しい順')),
+                                  ButtonSegment(value: true, label: Text('スタンプの多い順')),
+                                ],
+                                selected: {_popular},
+                                onSelectionChanged: (v) => setState(() => _popular = v.first),
+                              ),
+                            ),
+                          const SizedBox(height: 6),
+                        ]);
+                      }
+                      final d = docs[i - 1];
+                      return _post(d.id, d.data(), rank: _popular && i <= 3 ? i : null);
+                    },
+                  );
+                },
+              );
+            },
           ),
-        Expanded(child: _postList()),
+        ),
         if (_isOpen) _composer() else _closedBar(),
       ]),
+    );
+  }
+
+  Widget _center(Widget child) => LayoutBuilder(
+        builder: (context, c) => SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight - 32),
+            child: Center(child: child),
+          ),
+        ),
+      );
+
+  Widget _retry(String text) => Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(text, textAlign: TextAlign.center, style: const TextStyle(color: _brown)),
+        const SizedBox(height: 10),
+        OutlinedButton(
+          onPressed: () => setState(() => _streamObj = _makeStream()),
+          child: const Text('もう一度読みこむ'),
+        ),
+      ]);
+
+  // イベントのカード（いちばん大きく見せる）
+  Widget _hero(int people, List<String> uids) {
+    final c1 = room.colors.first, c2 = room.colors.last;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Stack(children: [
+        Positioned.fill(child: FestiveBackdrop(colors: room.colors, style: room.style, seed: room.id.hashCode + 7)),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [c1.withValues(alpha: .25), c2.withValues(alpha: .55)],
+            ),
+          ),
+          child: Column(children: [
+            Text(room.emoji, style: const TextStyle(fontSize: 56)),
+            const SizedBox(height: 4),
+            Text(room.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  shadows: [Shadow(color: Color(0x55000000), blurRadius: 6)],
+                )),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: _isOpen ? const Color(0xFFE84A5F) : Colors.black26,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(_status, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 12, offset: Offset(0, 4))],
+              ),
+              child: Column(children: [
+                Text(room.span == null ? 'この部屋のテーマ' : '今回のお題',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c2)),
+                const SizedBox(height: 4),
+                Text(room.prompt ?? room.desc,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: _brown, height: 1.35)),
+                const SizedBox(height: 14),
+                _faces(people, uids),
+                const SizedBox(height: 14),
+                if (_isOpen)
+                  Row(children: [
+                    if (room.allowPhoto) ...[
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: c2,
+                            minimumSize: const Size.fromHeight(48),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          ),
+                          onPressed: _uploading ? null : _pickImage,
+                          icon: const Icon(Icons.photo_camera_rounded),
+                          label: const Text('写真で参加', style: TextStyle(fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ] else ...[
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: c2,
+                            minimumSize: const Size.fromHeight(48),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          ),
+                          onPressed: () => _focus.requestFocus(),
+                          icon: const Icon(Icons.edit_rounded),
+                          label: const Text('ひとことで参加', style: TextStyle(fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: c2,
+                          side: BorderSide(color: c2, width: 2),
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        ),
+                        onPressed: _sending ? null : _showStamps,
+                        icon: const Icon(Icons.emoji_emotions_outlined),
+                        label: const Text('スタンプで参加', style: TextStyle(fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ])
+                else
+                  Text(_closedText, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  // 参加している子の写真をならべる
+  Widget _faces(int people, List<String> uids) {
+    if (people == 0) {
+      return Text('見るだけでも大丈夫です', style: TextStyle(fontSize: 13, color: Colors.grey[600]));
+    }
+    final show = uids.take(6).toList();
+    return Column(children: [
+      SizedBox(
+        height: 40,
+        width: 28.0 * show.length + 14,
+        child: Stack(children: [
+          for (var i = 0; i < show.length; i++)
+            Positioned(
+              left: 28.0 * i,
+              child: FutureBuilder<_Author?>(
+                future: _author(show[i]),
+                builder: (context, s) {
+                  final img = s.data == null || s.data!.pets.isEmpty ? null : _okImg(s.data!.pets.first['imageUrl']);
+                  return Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: room.colors.first.withValues(alpha: .2),
+                      border: Border.all(color: Colors.white, width: 2.5),
+                      image: img == null ? null : DecorationImage(image: NetworkImage(img), fit: BoxFit.cover),
+                    ),
+                    child: img == null ? const Center(child: Text('🐾', style: TextStyle(fontSize: 16))) : null,
+                  );
+                },
+              ),
+            ),
+        ]),
+      ),
+      const SizedBox(height: 6),
+      Text('$people人が参加しています',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _brown)),
+    ]);
+  }
+
+  String _time(dynamic ts) {
+    if (ts is! Timestamp) return 'いま';
+    final t = ts.toDate();
+    final diff = DateTime.now().difference(t);
+    if (diff.inMinutes < 1) return 'いま';
+    if (diff.inHours < 1) return '${diff.inMinutes}分前';
+    if (diff.inDays < 1) return '${diff.inHours}時間前';
+    return '${t.month}/${t.day}';
+  }
+
+  String? _pawBurst; // 2回タップで🐾を押したとき、少しだけ大きく出す
+
+  Widget _post(String id, Map<String, dynamic> d, {int? rank}) {
+    final me = _me;
+    final uid = (d['uid'] as String?) ?? '';
+    final mine = uid == me;
+    final hidden = d['name'] == hiddenName;
+    final text = (d['text'] as String?) ?? '';
+    final img = _okImg(d['imageUrl']);
+    final onlyStamp = img == null && text.runes.length <= 2 && quickStamps.contains(text);
+    final reactions = (d['reactions'] as Map<String, dynamic>?) ?? const {};
+    final pawed = ((reactions['paw'] as List?) ?? const []).contains(me);
+    final chips = <Widget>[];
+    for (final r in hirobaReactions) {
+      final list = (reactions[r.$1] as List?) ?? const [];
+      if (list.isEmpty && r.$1 != 'paw') continue;
+      final on = list.contains(me);
+      chips.add(_ReactionChip(
+        label: list.isEmpty ? '${r.$2} ${r.$3}' : '${r.$2} ${list.length}',
+        on: on,
+        color: room.colors.first,
+        onTap: () => _toggleReaction(id, r.$1, on),
+      ));
+    }
+    chips.add(_ReactionChip(label: '＋', on: false, color: room.colors.first, onTap: () => _pickReaction(id, reactions)));
+
+    final header = FutureBuilder<_Author?>(
+      future: hidden || uid.isEmpty ? Future.value(null) : _author(uid),
+      builder: (context, s) {
+        final a = s.data;
+        final pet = a == null || a.pets.isEmpty ? null : a.pets.first;
+        final petImg = pet == null ? null : _okImg(pet['imageUrl']);
+        final owner = hidden ? hiddenName : (mine ? 'あなた' : ((d['name'] as String?) ?? a?.name ?? '名無しさん'));
+        return InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: a == null || hidden ? null : () => _showAuthor(uid, a),
+          child: Row(children: [
+            Stack(clipBehavior: Clip.none, children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: room.colors.first.withValues(alpha: .18),
+                  border: Border.all(color: mine ? room.colors.last : Colors.white, width: 2.5),
+                  image: petImg == null ? null : DecorationImage(image: NetworkImage(petImg), fit: BoxFit.cover),
+                ),
+                child: petImg == null ? const Center(child: Text('🐾', style: TextStyle(fontSize: 18))) : null,
+              ),
+              if (a?.icon != null && !hidden)
+                Positioned(
+                  right: -4,
+                  bottom: -4,
+                  child: CircleAvatar(
+                    radius: 10,
+                    backgroundColor: Colors.white,
+                    child: CircleAvatar(radius: 8.5, backgroundImage: NetworkImage(a!.icon!)),
+                  ),
+                ),
+            ]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(pet == null || hidden ? owner : (pet['name'] as String?) ?? owner,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: _brown)),
+                if (pet != null && !hidden)
+                  Text('${(pet['type'] as String?) ?? ''}・飼い主 $owner',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              ]),
+            ),
+            if (rank != null)
+              Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: const Color(0xFFFFC83D), borderRadius: BorderRadius.circular(10)),
+                child: Text('$rank位', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: _brown)),
+              ),
+            Text(_time(d['createdAt']), style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+          ]),
+        );
+      },
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: GestureDetector(
+        onLongPress: () => _postMenu(id, d),
+        onDoubleTap: () {
+          if (!pawed) _toggleReaction(id, 'paw', false);
+          setState(() => _pawBurst = id);
+          Future.delayed(const Duration(milliseconds: 700), () {
+            if (mounted && _pawBurst == id) setState(() => _pawBurst = null);
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: mine ? room.colors.first.withValues(alpha: .6) : Colors.transparent, width: 1.5),
+            boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 10, offset: Offset(0, 3))],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            header,
+            const SizedBox(height: 10),
+            Stack(alignment: Alignment.center, children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (img != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: AspectRatio(
+                      aspectRatio: 4 / 5,
+                      child: Image.network(img,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) =>
+                              const SizedBox(height: 80, child: Center(child: Text('写真を読みこめませんでした')))),
+                    ),
+                  ),
+                if (img != null && text.isNotEmpty) const SizedBox(height: 8),
+                if (onlyStamp)
+                  Center(child: Text(text, style: const TextStyle(fontSize: 56)))
+                else if (text.isNotEmpty)
+                  Text(text, style: const TextStyle(fontSize: 15, color: _brown, height: 1.5)),
+              ]),
+              if (_pawBurst == id)
+                const IgnorePointer(child: Text('🐾', style: TextStyle(fontSize: 72))),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 4, children: chips),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -393,182 +915,6 @@ class _HirobaRoomPageState extends State<HirobaRoomPage> {
             Expanded(child: Text(_closedText, style: const TextStyle(color: _brown))),
           ]),
         ),
-      ),
-    );
-  }
-
-  Widget _promptBanner() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: room.colors.first.withValues(alpha: 0.4)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(room.prompt ?? room.desc,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: _brown)),
-        const SizedBox(height: 3),
-        Text(
-          room.allowPhoto
-              ? '見るだけでも大丈夫。🐾 スタンプ1つ、写真1枚からどうぞ'
-              : '見るだけでも大丈夫。🐾 スタンプ1つからどうぞ',
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _postList() {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _stream,
-      builder: (context, snap) {
-        if (snap.hasError) {
-          return const Center(child: Text('読みこめませんでした。少ししてから開き直してください'));
-        }
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        return ValueListenableBuilder<Set<String>>(
-          valueListenable: BlockedUsers.instance.ids,
-          builder: (context, blocked, _) {
-            final docs = snap.data!.docs.where((d) => !blocked.contains(d.data()['uid'])).toList();
-            if (room.span != null) {
-              // お題・お祭りの部屋は、新しい順に並べかえる（送ったばかりのものは、いちばん新しい）
-              int ms(QueryDocumentSnapshot<Map<String, dynamic>> d) {
-                final t = d.data()['createdAt'];
-                return t is Timestamp ? t.millisecondsSinceEpoch : 8640000000000000;
-              }
-
-              docs.sort((a, b) => ms(b).compareTo(ms(a)));
-            }
-            if (_popular) {
-              int score(QueryDocumentSnapshot<Map<String, dynamic>> d) {
-                final r = (d.data()['reactions'] as Map<String, dynamic>?) ?? const {};
-                return r.values.fold<int>(0, (n, v) => n + ((v as List?)?.length ?? 0));
-              }
-
-              docs.sort((a, b) => score(b).compareTo(score(a)));
-            }
-            if (docs.isEmpty) return _empty();
-            return ListView.builder(
-              reverse: !_popular,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              itemCount: docs.length,
-              itemBuilder: (_, i) => _post(docs[i].id, docs[i].data()),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _empty() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(room.emoji, style: const TextStyle(fontSize: 52)),
-          const SizedBox(height: 10),
-          const Text('まだだれも書いていません',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _brown)),
-          const SizedBox(height: 6),
-          Text('いちばん乗りのひとことをどうぞ。\nスタンプだけでも大丈夫です',
-              textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], height: 1.5)),
-        ]),
-      ),
-    );
-  }
-
-  String _time(dynamic ts) {
-    if (ts is! Timestamp) return 'いま';
-    final t = ts.toDate();
-    final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 1) return 'いま';
-    if (diff.inHours < 1) return '${diff.inMinutes}分前';
-    if (diff.inDays < 1) return '${diff.inHours}時間前';
-    return '${t.month}/${t.day}';
-  }
-
-  Widget _post(String id, Map<String, dynamic> d) {
-    final me = _me;
-    final mine = d['uid'] == me;
-    final text = (d['text'] as String?) ?? '';
-    final img = d['imageUrl'] as String?;
-    final onlyStamp = img == null && text.runes.length <= 2 && quickStamps.contains(text);
-    final reactions = (d['reactions'] as Map<String, dynamic>?) ?? const {};
-    final chips = <Widget>[];
-    for (final r in hirobaReactions) {
-      final list = (reactions[r.$1] as List?) ?? const [];
-      if (list.isEmpty && r.$1 != 'paw') continue;
-      final on = list.contains(me);
-      chips.add(_ReactionChip(
-        label: list.isEmpty ? '${r.$2} ${r.$3}' : '${r.$2} ${list.length}',
-        on: on,
-        color: room.colors.first,
-        onTap: () => _toggleReaction(id, r.$1, on),
-      ));
-    }
-    chips.add(_ReactionChip(
-      label: '＋',
-      on: false,
-      color: room.colors.first,
-      onTap: () => _pickReaction(id, reactions),
-    ));
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Column(
-        crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Text(
-              '${mine ? 'あなた' : (d['name'] ?? '名無しさん')}　${_time(d['createdAt'])}',
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-            ),
-          ),
-          const SizedBox(height: 2),
-          GestureDetector(
-            onLongPress: () => _postMenu(id, d),
-            child: Container(
-              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-              padding: onlyStamp
-                  ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
-                  : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: onlyStamp
-                  ? null
-                  : BoxDecoration(
-                      color: mine ? room.colors.first.withValues(alpha: 0.16) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4, offset: const Offset(0, 1)),
-                      ],
-                    ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (img != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(img,
-                          height: 240,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const SizedBox(
-                              height: 80, child: Center(child: Text('写真を読みこめませんでした')))),
-                    ),
-                  if (img != null && text.isNotEmpty) const SizedBox(height: 6),
-                  if (text.isNotEmpty)
-                    Text(text,
-                        style: TextStyle(fontSize: onlyStamp ? 40 : 15, color: _brown, height: 1.4)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Wrap(spacing: 6, runSpacing: 4, children: chips),
-        ],
       ),
     );
   }
@@ -718,3 +1064,13 @@ class _ReactionChip extends StatelessWidget {
     );
   }
 }
+
+class _Author {
+  final String name;
+  final String? icon;
+  final String motto;
+  final List<Map<String, dynamic>> pets;
+  const _Author({required this.name, required this.icon, required this.motto, required this.pets});
+}
+
+String? _okImg(dynamic u) => u is String && u.startsWith('https://') && u.length <= 600 ? u : null;
