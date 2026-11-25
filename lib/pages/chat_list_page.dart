@@ -7,6 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/unread_service.dart';
 import 'event_chat_page.dart';
 import 'chat_page.dart';
+import 'event_extras.dart' show myEvtStream, evtMap;
+import 'hiroba_data.dart';
+import 'hiroba_room_page.dart';
 
 class ChatListPage extends StatefulWidget {
   const ChatListPage({super.key});
@@ -63,7 +66,7 @@ class _ChatListPageState extends State<ChatListPage>
   void initState() {
     super.initState();
     TabReselect.tabs[3].addListener(_toTop);
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     _startSlowTimer();
     _listenOrgChats();
     // グループ（イベント）の一覧と未読は、共通部品が数えている
@@ -572,6 +575,7 @@ class _ChatListPageState extends State<ChatListPage>
               unselectedLabelColor: Colors.grey,
               indicatorColor: const Color(0xFFE8845A),
               tabs: [
+                const Tab(text: 'イベント'),
                 Tab(child: _tabLabel('団体（${_orgChats.length}）', orgUnread)),
                 Tab(
                     child: _tabLabel(
@@ -582,12 +586,128 @@ class _ChatListPageState extends State<ChatListPage>
           body: TabBarView(
             controller: _tabCtrl,
             children: [
+              const _JoinedEventsTab(),
               _buildOrgTab(),
               _buildEventTab(groups),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+// 参加したイベント（アプリの中のイベント）。11/25 イベントを作り直したので、チャットのタブからも入れるように
+class _JoinedEventsTab extends StatelessWidget {
+  const _JoinedEventsTab();
+
+  OnlineEvent? _find(String room, String span, DateTime now) {
+    for (final e in [...liveOnlineEvents(now), ...upcomingOnlineEvents(now)]) {
+      if (e.roomId == room && e.span == span) return e;
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final live = liveOnlineEvents(now);
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: myEvtStream(),
+      builder: (context, snap) {
+        final joined = evtMap(snap.data ?? const {}, 'joined').entries.where((e) => e.value is Map).toList()
+          ..sort((a, b) {
+            final ta = (a.value as Map)['at'], tb = (b.value as Map)['at'];
+            final ma = ta is Timestamp ? ta.millisecondsSinceEpoch : 0, mb = tb is Timestamp ? tb.millisecondsSinceEpoch : 0;
+            return mb.compareTo(ma);
+          });
+        return ListView(padding: const EdgeInsets.fromLTRB(12, 12, 12, 24), children: [
+          if (live.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+              child: Text('いま開催中', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+            ),
+            for (final e in live) _tile(context, e.emoji, e.title, e.theme, e.colors, '開催中', () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: e.room)));
+            }),
+            const SizedBox(height: 12),
+          ],
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text('参加したイベント', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+          ),
+          if (joined.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('まだありません。イベントで書きこんだり、「やった！」や「参加する」を押すと、ここに出ます',
+                  style: TextStyle(color: Colors.grey[600], height: 1.5)),
+            )
+          else
+            for (final j in joined.take(20))
+              () {
+                final m = j.value as Map;
+                final e = _find('${m['room'] ?? ''}', '${m['span'] ?? ''}', now);
+                final status = e == null ? '終わりました' : (e.isLive(now) ? '開催中' : '${whenText(e.start)}から');
+                return _tile(
+                  context,
+                  '${m['emoji'] ?? '🎪'}',
+                  '${m['name'] ?? ''}',
+                  e?.theme ?? '',
+                  e?.colors ?? const [Color(0xFFBDB3A7), Color(0xFF8E8379)],
+                  status,
+                  e == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: e.room))),
+                );
+              }(),
+        ]);
+      },
+    );
+  }
+
+  Widget _tile(BuildContext context, String emoji, String title, String sub, List<Color> colors, String status,
+      VoidCallback? onTap) {
+    final live = status == '開催中';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Container(
+                width: 52,
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: colors),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(emoji, style: const TextStyle(fontSize: 26)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  if (sub.isNotEmpty)
+                    Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                ]),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: live ? const Color(0xFFE84A5F) : const Color(0xFFF1ECE6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(status,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: live ? Colors.white : Colors.grey[700])),
+              ),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

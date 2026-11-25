@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'first_steps.dart' show NewFacesRow;
+import 'event_extras.dart' show LiveEventBanner;
 import '../services/blocked_users.dart';
 import 'pet_brag_page.dart';
 import 'ranking_page.dart';
@@ -148,6 +149,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
+                  // 開催中のイベントを大きく（11/25 社長「イベントに来てほしい人のために、メインのイベントを大きく」）
+                  const LiveEventBanner(),
                   // ホームがのびても迷わないように、よく使う場所へすぐ行けるボタン（スライドしなくても全部見える）
                   _HomeShortcuts(
                     onFeed: () => _jump(_feedKey),

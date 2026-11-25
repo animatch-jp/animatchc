@@ -19,6 +19,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../widgets/motion.dart';
 import 'hiroba_data.dart';
+import 'hiroba_room_page.dart';
 
 const _ink = Color(0xFF3D2B1F);
 
@@ -1024,6 +1025,109 @@ class EventExtrasPreview extends StatelessWidget {
           'c': {'emoji': '🎃', 'name': 'ハロウィン'},
         }),
       ]),
+    );
+  }
+}
+
+// ============================================================
+// ホーム：開催中のイベントを大きく。参加予定の話しあい会が近いときは、お知らせ
+// ============================================================
+
+class LiveEventBanner extends StatelessWidget {
+  const LiveEventBanner({super.key});
+
+  void _open(BuildContext context, OnlineEvent e) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => HirobaRoomPage(room: e.room)));
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final live = liveOnlineEvents(now);
+    final soon = upcomingOnlineEvents(now);
+    return StreamBuilder<Map<String, dynamic>>(
+      stream: myEvtStream(),
+      builder: (context, snap) {
+        final rsvp = evtMap(snap.data ?? const {}, 'rsvp');
+        OnlineEvent? remind;
+        for (final e in [...live, ...soon]) {
+          if (e.kind == 'talk' && rsvp[evtKey(e.room)] == true && e.start.difference(now).inMinutes <= 60 && now.isBefore(e.end)) {
+            remind = e;
+            break;
+          }
+        }
+        final main = live.isNotEmpty ? live.first : null;
+        if (main == null && remind == null) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(children: [
+            if (remind != null)
+              Pressable(
+                onTap: () => _open(context, remind!),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3B3B98),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(children: [
+                    Text(remind.emoji, style: const TextStyle(fontSize: 24)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                          remind.isLive(now)
+                              ? '参加予定の「${remind.title}」が始まっています'
+                              : 'もうすぐ「${remind.title}」（${remind.start.hour}:${remind.start.minute.toString().padLeft(2, '0')}から）',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                  ]),
+                ),
+              ),
+            if (main != null)
+              Pressable(
+                onTap: () => _open(context, main),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: main.colors),
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [BoxShadow(color: main.colors.last.withValues(alpha: .35), blurRadius: 14, offset: const Offset(0, 6))],
+                  ),
+                  child: Row(children: [
+                    Text(main.emoji, style: const TextStyle(fontSize: 42)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                          child: const Text('いま開催中',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFFE84A5F))),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(main.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white)),
+                        Text(main.theme,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13, color: Colors.white)),
+                        if (live.length > 1)
+                          Text('ほかに${live.length - 1}つ開催中',
+                              style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                      ]),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                      child: Text('参加する', style: TextStyle(fontWeight: FontWeight.w900, color: main.colors.last)),
+                    ),
+                  ]),
+                ),
+              ),
+          ]),
+        );
+      },
     );
   }
 }
